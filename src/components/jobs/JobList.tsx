@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { JobCard } from "./JobCard";
 import { JobDetailModal } from "./JobDetailModal";
 import type { JobWithMatch } from "@/types/job";
@@ -9,6 +9,8 @@ interface JobListProps {
   onDelete: (jobId: string) => void;
   scoringJobId: string | null;
   hasResume: boolean;
+  newlyScoredJobId?: string | null;
+  onScoredJobViewed?: () => void;
 }
 
 export function JobList({
@@ -17,8 +19,27 @@ export function JobList({
   onDelete,
   scoringJobId,
   hasResume,
+  newlyScoredJobId,
+  onScoredJobViewed,
 }: JobListProps) {
   const [selectedJob, setSelectedJob] = useState<JobWithMatch | null>(null);
+
+  // Auto-open modal when a job is newly scored
+  useEffect(() => {
+    if (newlyScoredJobId) {
+      const scoredJob = jobs.find((j) => j.id === newlyScoredJobId);
+      if (scoredJob) {
+        setSelectedJob(scoredJob);
+      }
+    }
+  }, [newlyScoredJobId, jobs]);
+
+  const handleCloseModal = () => {
+    setSelectedJob(null);
+    if (newlyScoredJobId) {
+      onScoredJobViewed?.();
+    }
+  };
 
   if (jobs.length === 0) {
     return (
@@ -47,7 +68,7 @@ export function JobList({
       <JobDetailModal
         job={selectedJob}
         open={!!selectedJob}
-        onClose={() => setSelectedJob(null)}
+        onClose={handleCloseModal}
       />
     </>
   );
