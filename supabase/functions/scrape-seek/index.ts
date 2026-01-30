@@ -5,6 +5,19 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
+interface ScrapedJob {
+  seek_job_id: string;
+  title: string;
+  company: string;
+  location: string;
+  salary_range?: string;
+  work_type?: string;
+  work_arrangement?: string;
+  description_snippet: string;
+  job_url: string;
+  date_posted?: string;
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -58,7 +71,7 @@ serve(async (req) => {
     const seekUrl = `https://www.seek.com.au/${keywords.toLowerCase().replace(/\s+/g, '-')}-jobs?${searchParams.toString()}`;
     console.log('Scraping SEEK URL:', seekUrl);
 
-    // Use Firecrawl to scrape SEEK
+    // Use Firecrawl with JSON extraction for structured data
     const response = await fetch('https://api.firecrawl.dev/v1/scrape', {
       method: 'POST',
       headers: {
@@ -67,9 +80,23 @@ serve(async (req) => {
       },
       body: JSON.stringify({
         url: seekUrl,
-        formats: ['markdown', 'html'],
+        formats: ['markdown', 'html', { 
+          type: 'json',
+          prompt: `Extract all job listings from this SEEK job search results page. For each job, extract:
+- title: the job title/position name
+- company: the company/employer name
+- location: the job location (city, state, or area)
+- salary: salary range if shown (e.g., "$80,000 - $100,000")
+- workType: employment type (Full-time, Part-time, Contract, Casual)
+- workArrangement: remote/hybrid/on-site if mentioned
+- snippet: a brief description or key requirements
+- jobId: the SEEK job ID (numeric ID from the job link)
+- datePosted: when the job was posted (e.g., "1d ago", "Just posted")
+
+Return an array of job objects. Include as many jobs as you can find on the page.`
+        }],
         onlyMainContent: true,
-        waitFor: 3000,
+        waitFor: 5000,
       }),
     });
 
@@ -87,9 +114,9 @@ serve(async (req) => {
       );
     }
 
-    // Parse the scraped content to extract job listings
+    // Parse the scraped content
     const jobLimit = Math.min(Math.max(parseInt(limit) || 20, 1), 50);
-    const jobs = parseSeekJobs(scrapeData.data?.html || '', scrapeData.data?.markdown || '', seekUrl, jobLimit);
+    const jobs = parseSeekJobs(scrapeData.data, jobLimit);
     console.log(`Parsed ${jobs.length} jobs from SEEK (limit: ${jobLimit})`);
 
     return new Response(
@@ -106,151 +133,199 @@ serve(async (req) => {
   }
 });
 
-interface ScrapedJob {
-  seek_job_id: string;
-  title: string;
-  company: string;
-  location: string;
-  salary_range?: string;
-  work_type?: string;
-  work_arrangement?: string;
-  description_snippet: string;
-  job_url: string;
-  date_posted?: string;
-}
-
-function parseSeekJobs(html: string, markdown: string, baseUrl: string, limit: number = 20): ScrapedJob[] {
+function parseSeekJobs(data: any, limit: number): ScrapedJob[] {
   const jobs: ScrapedJob[] = [];
   
-  // Try to extract job IDs from the HTML/markdown
-  // SEEK job URLs typically look like: /job/12345678
-  const jobIdPattern = /\/job\/(\d+)/g;
-  const foundIds = new Set<string>();
-  
-  let match;
-  while ((match = jobIdPattern.exec(html)) !== null) {
-    foundIds.add(match[1]);
-  }
-  while ((match = jobIdPattern.exec(markdown)) !== null) {
-    foundIds.add(match[1]);
-  }
-
-  // Parse markdown for job information
-  // SEEK listings typically have patterns like:
-  // [Job Title](url) - Company - Location
-  const lines = markdown.split('\n');
-  
-  // Look for job card patterns in the content
-  let currentJob: Partial<ScrapedJob> = {};
-  
-  for (const line of lines) {
-    // Look for job links [Title](/job/ID)
-    const linkMatch = line.match(/\[([^\]]+)\]\(\/job\/(\d+)[^\)]*\)/);
-    if (linkMatch) {
-      // Save previous job if valid
-      if (currentJob.seek_job_id && currentJob.title && currentJob.company) {
-        jobs.push({
-          seek_job_id: currentJob.seek_job_id,
-          title: currentJob.title,
-          company: currentJob.company || 'Unknown Company',
-          location: currentJob.location || 'Australia',
-          salary_range: currentJob.salary_range,
-          work_type: currentJob.work_type,
-          work_arrangement: currentJob.work_arrangement,
-          description_snippet: currentJob.description_snippet || '',
-          job_url: `https://www.seek.com.au/job/${currentJob.seek_job_id}`,
-        });
-      }
+  // Try to use the JSON extraction first
+  if (data?.json) {
+    console.log('Using JSON extraction data');
+    const jsonJobs = Array.isArray(data.json) ? data.json : data.json.jobs || [];
+    
+    for (const job of jsonJobs) {
+      if (jobs.length >= limit) break;
       
-      // Start new job
-      currentJob = {
-        seek_job_id: linkMatch[2],
-        title: linkMatch[1].trim(),
-      };
-      continue;
-    }
-
-    // If we have a current job, try to extract more info
-    if (currentJob.seek_job_id) {
-      // Look for company name (usually follows title)
-      if (!currentJob.company && line.trim() && !line.startsWith('[') && !line.startsWith('#')) {
-        const cleanLine = line.replace(/\*\*/g, '').trim();
-        if (cleanLine.length > 2 && cleanLine.length < 100) {
-          currentJob.company = cleanLine;
-          continue;
-        }
-      }
+      const jobId = extractJobId(job.jobId || job.id || job.link || '');
+      if (!jobId) continue;
       
-      // Look for location
-      if (!currentJob.location && line.includes('Location') || line.match(/\b(Sydney|Melbourne|Brisbane|Perth|Adelaide|Canberra|Hobart|Darwin)\b/i)) {
-        const locationMatch = line.match(/\b(Sydney|Melbourne|Brisbane|Perth|Adelaide|Canberra|Hobart|Darwin|NSW|VIC|QLD|WA|SA|ACT|TAS|NT)[^,\n]*/i);
-        if (locationMatch) {
-          currentJob.location = locationMatch[0].trim();
-        }
-      }
-      
-      // Look for salary
-      if (!currentJob.salary_range && line.match(/\$[\d,]+/)) {
-        const salaryMatch = line.match(/\$[\d,]+\s*-?\s*\$?[\d,]*/);
-        if (salaryMatch) {
-          currentJob.salary_range = salaryMatch[0];
-        }
-      }
-      
-      // Look for work type
-      if (!currentJob.work_type) {
-        const workTypeMatch = line.match(/\b(Full[- ]?time|Part[- ]?time|Contract|Casual|Temporary)\b/i);
-        if (workTypeMatch) {
-          currentJob.work_type = workTypeMatch[0];
-        }
-      }
-
-      // Look for work arrangement
-      if (!currentJob.work_arrangement) {
-        const arrangementMatch = line.match(/\b(Remote|Hybrid|On[- ]?site|Work from home|WFH)\b/i);
-        if (arrangementMatch) {
-          currentJob.work_arrangement = arrangementMatch[0];
-        }
-      }
-      
-      // Build description from content
-      if (!currentJob.description_snippet && line.trim().length > 50) {
-        currentJob.description_snippet = line.trim().substring(0, 200);
-      }
-    }
-  }
-
-  // Don't forget the last job
-  if (currentJob.seek_job_id && currentJob.title) {
-    jobs.push({
-      seek_job_id: currentJob.seek_job_id,
-      title: currentJob.title,
-      company: currentJob.company || 'Unknown Company',
-      location: currentJob.location || 'Australia',
-      salary_range: currentJob.salary_range,
-      work_type: currentJob.work_type,
-      work_arrangement: currentJob.work_arrangement,
-      description_snippet: currentJob.description_snippet || 'Click to view full job description on SEEK',
-      job_url: `https://www.seek.com.au/job/${currentJob.seek_job_id}`,
-    });
-  }
-
-  // If we found job IDs but couldn't parse details, create basic entries
-  if (jobs.length === 0 && foundIds.size > 0) {
-    let index = 0;
-    for (const jobId of Array.from(foundIds).slice(0, limit)) {
       jobs.push({
         seek_job_id: jobId,
-        title: `Job Listing #${index + 1}`,
-        company: 'See SEEK for details',
-        location: 'Australia',
-        description_snippet: 'Click to view full job description on SEEK',
+        title: cleanText(job.title || job.jobTitle) || 'Untitled Position',
+        company: cleanText(job.company || job.employer || job.companyName) || 'Unknown Company',
+        location: cleanText(job.location || job.area) || 'Australia',
+        salary_range: cleanText(job.salary || job.salaryRange),
+        work_type: cleanText(job.workType || job.employmentType),
+        work_arrangement: cleanText(job.workArrangement || job.remote),
+        description_snippet: cleanText(job.snippet || job.description || job.summary) || '',
         job_url: `https://www.seek.com.au/job/${jobId}`,
+        date_posted: job.datePosted || job.postedDate,
       });
-      index++;
+    }
+  }
+  
+  // If JSON extraction didn't work, fall back to parsing markdown/HTML
+  if (jobs.length === 0) {
+    console.log('Falling back to markdown/HTML parsing');
+    const html = data?.html || '';
+    const markdown = data?.markdown || '';
+    
+    // Extract job IDs from links
+    const jobIdPattern = /\/job\/(\d+)/g;
+    const foundIds = new Set<string>();
+    
+    let match;
+    while ((match = jobIdPattern.exec(html)) !== null) {
+      foundIds.add(match[1]);
+    }
+    while ((match = jobIdPattern.exec(markdown)) !== null) {
+      foundIds.add(match[1]);
+    }
+
+    // Parse markdown for job information
+    const lines = markdown.split('\n');
+    let currentJob: Partial<ScrapedJob> = {};
+    
+    for (const line of lines) {
+      if (jobs.length >= limit) break;
+      
+      // Look for job links [Title](/job/ID)
+      const linkMatch = line.match(/\[([^\]]+)\]\(\/job\/(\d+)[^\)]*\)/);
+      if (linkMatch) {
+        // Save previous job if valid
+        if (currentJob.seek_job_id && currentJob.title) {
+          jobs.push(buildJob(currentJob));
+        }
+        
+        // Start new job
+        currentJob = {
+          seek_job_id: linkMatch[2],
+          title: linkMatch[1].trim(),
+        };
+        continue;
+      }
+
+      // If we have a current job, try to extract more info
+      if (currentJob.seek_job_id) {
+        extractJobDetails(line, currentJob);
+      }
+    }
+
+    // Don't forget the last job
+    if (currentJob.seek_job_id && currentJob.title && jobs.length < limit) {
+      jobs.push(buildJob(currentJob));
+    }
+
+    // If we still have no jobs but found IDs, try to scrape individual job pages
+    if (jobs.length === 0 && foundIds.size > 0) {
+      console.log(`Found ${foundIds.size} job IDs but couldn't parse details. Creating placeholder entries.`);
+      let index = 0;
+      for (const jobId of Array.from(foundIds).slice(0, limit)) {
+        jobs.push({
+          seek_job_id: jobId,
+          title: `SEEK Job #${jobId}`,
+          company: 'View on SEEK',
+          location: 'Australia',
+          description_snippet: 'Click "View on SEEK" to see full job details',
+          job_url: `https://www.seek.com.au/job/${jobId}`,
+        });
+        index++;
+      }
     }
   }
 
-  // Apply limit
   return jobs.slice(0, limit);
+}
+
+function extractJobId(input: string): string | null {
+  if (!input) return null;
+  
+  // If it's already just a number
+  if (/^\d+$/.test(input)) return input;
+  
+  // Extract from URL or path
+  const match = input.match(/\/job\/(\d+)/);
+  if (match) return match[1];
+  
+  // Extract any number sequence
+  const numMatch = input.match(/(\d{6,})/);
+  if (numMatch) return numMatch[1];
+  
+  return null;
+}
+
+function cleanText(text: string | undefined | null): string | undefined {
+  if (!text) return undefined;
+  return text.toString().trim().replace(/\s+/g, ' ');
+}
+
+function buildJob(partial: Partial<ScrapedJob>): ScrapedJob {
+  return {
+    seek_job_id: partial.seek_job_id!,
+    title: partial.title || 'Untitled Position',
+    company: partial.company || 'Unknown Company',
+    location: partial.location || 'Australia',
+    salary_range: partial.salary_range,
+    work_type: partial.work_type,
+    work_arrangement: partial.work_arrangement,
+    description_snippet: partial.description_snippet || '',
+    job_url: `https://www.seek.com.au/job/${partial.seek_job_id}`,
+    date_posted: partial.date_posted,
+  };
+}
+
+function extractJobDetails(line: string, job: Partial<ScrapedJob>): void {
+  const cleanLine = line.replace(/\*\*/g, '').trim();
+  
+  // Look for company name (usually follows title)
+  if (!job.company && cleanLine.length > 2 && cleanLine.length < 100 && !cleanLine.startsWith('[') && !cleanLine.startsWith('#')) {
+    // Skip lines that look like metadata
+    if (!cleanLine.includes('ago') && !cleanLine.includes('Apply') && !cleanLine.includes('Save')) {
+      job.company = cleanLine;
+      return;
+    }
+  }
+  
+  // Look for location
+  if (!job.location) {
+    const locationMatch = line.match(/\b(Sydney|Melbourne|Brisbane|Perth|Adelaide|Canberra|Hobart|Darwin|Gold Coast|Newcastle|Wollongong)[^,\n]*/i);
+    if (locationMatch) {
+      job.location = locationMatch[0].trim();
+    }
+  }
+  
+  // Look for salary
+  if (!job.salary_range && line.match(/\$[\d,]+/)) {
+    const salaryMatch = line.match(/\$[\d,]+\s*-?\s*\$?[\d,]*/);
+    if (salaryMatch) {
+      job.salary_range = salaryMatch[0];
+    }
+  }
+  
+  // Look for work type
+  if (!job.work_type) {
+    const workTypeMatch = line.match(/\b(Full[- ]?time|Part[- ]?time|Contract|Casual|Temporary)\b/i);
+    if (workTypeMatch) {
+      job.work_type = workTypeMatch[0];
+    }
+  }
+
+  // Look for work arrangement
+  if (!job.work_arrangement) {
+    const arrangementMatch = line.match(/\b(Remote|Hybrid|On[- ]?site|Work from home|WFH)\b/i);
+    if (arrangementMatch) {
+      job.work_arrangement = arrangementMatch[0];
+    }
+  }
+  
+  // Look for date posted
+  if (!job.date_posted) {
+    const dateMatch = line.match(/(\d+[dh]?\s*ago|Just posted|Today|Yesterday)/i);
+    if (dateMatch) {
+      job.date_posted = dateMatch[0];
+    }
+  }
+  
+  // Build description from content
+  if (!job.description_snippet && cleanLine.length > 50) {
+    job.description_snippet = cleanLine.substring(0, 200);
+  }
 }
