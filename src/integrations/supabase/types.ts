@@ -14,7 +14,156 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      job_matches: {
+        Row: {
+          cons: string[] | null
+          gaps: string[] | null
+          id: string
+          job_id: string
+          match_score: number
+          pros: string[] | null
+          reasoning: string | null
+          recommendation: string
+          resume_profile_id: string
+          scored_at: string
+          skill_match_percentage: number | null
+          strategic_advice: string | null
+        }
+        Insert: {
+          cons?: string[] | null
+          gaps?: string[] | null
+          id?: string
+          job_id: string
+          match_score: number
+          pros?: string[] | null
+          reasoning?: string | null
+          recommendation: string
+          resume_profile_id: string
+          scored_at?: string
+          skill_match_percentage?: number | null
+          strategic_advice?: string | null
+        }
+        Update: {
+          cons?: string[] | null
+          gaps?: string[] | null
+          id?: string
+          job_id?: string
+          match_score?: number
+          pros?: string[] | null
+          reasoning?: string | null
+          recommendation?: string
+          resume_profile_id?: string
+          scored_at?: string
+          skill_match_percentage?: number | null
+          strategic_advice?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "job_matches_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "jobs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "job_matches_resume_profile_id_fkey"
+            columns: ["resume_profile_id"]
+            isOneToOne: false
+            referencedRelation: "resume_profile"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      jobs: {
+        Row: {
+          company: string
+          date_posted: string | null
+          date_scraped: string
+          description_snippet: string
+          full_description: string | null
+          id: string
+          job_url: string
+          location: string
+          salary_range: string | null
+          seek_job_id: string
+          title: string
+          work_arrangement: string | null
+          work_type: string | null
+        }
+        Insert: {
+          company: string
+          date_posted?: string | null
+          date_scraped?: string
+          description_snippet: string
+          full_description?: string | null
+          id?: string
+          job_url: string
+          location: string
+          salary_range?: string | null
+          seek_job_id: string
+          title: string
+          work_arrangement?: string | null
+          work_type?: string | null
+        }
+        Update: {
+          company?: string
+          date_posted?: string | null
+          date_scraped?: string
+          description_snippet?: string
+          full_description?: string | null
+          id?: string
+          job_url?: string
+          location?: string
+          salary_range?: string | null
+          seek_job_id?: string
+          title?: string
+          work_arrangement?: string | null
+          work_type?: string | null
+        }
+        Relationships: []
+      }
+      resume_profile: {
+        Row: {
+          certifications: string[] | null
+          education: string[] | null
+          id: string
+          industries: string[] | null
+          previous_titles: string[] | null
+          raw_text: string
+          skills_soft: string[] | null
+          skills_technical: string[] | null
+          summary: string | null
+          updated_at: string
+          years_experience: number | null
+        }
+        Insert: {
+          certifications?: string[] | null
+          education?: string[] | null
+          id?: string
+          industries?: string[] | null
+          previous_titles?: string[] | null
+          raw_text: string
+          skills_soft?: string[] | null
+          skills_technical?: string[] | null
+          summary?: string | null
+          updated_at?: string
+          years_experience?: number | null
+        }
+        Update: {
+          certifications?: string[] | null
+          education?: string[] | null
+          id?: string
+          industries?: string[] | null
+          previous_titles?: string[] | null
+          raw_text?: string
+          skills_soft?: string[] | null
+          skills_technical?: string[] | null
+          summary?: string | null
+          updated_at?: string
+          years_experience?: number | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
