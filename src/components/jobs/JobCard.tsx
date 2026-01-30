@@ -2,6 +2,7 @@ import { ExternalLink, MapPin, Building2, Calendar, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { MatchScoreBadge } from "./MatchScoreBadge";
 import type { JobWithMatch } from "@/types/job";
 import { formatDistanceToNow } from "date-fns";
@@ -13,6 +14,8 @@ interface JobCardProps {
   onViewDetails: (job: JobWithMatch) => void;
   isScoring: boolean;
   hasResume: boolean;
+  isSelected?: boolean;
+  onSelectChange?: (jobId: string, selected: boolean) => void;
 }
 
 export function JobCard({
@@ -22,16 +25,26 @@ export function JobCard({
   onViewDetails,
   isScoring,
   hasResume,
+  isSelected = false,
+  onSelectChange,
 }: JobCardProps) {
   const datePosted = job.date_posted
     ? formatDistanceToNow(new Date(job.date_posted), { addSuffix: true })
     : null;
 
   return (
-    <Card className="hover:shadow-md transition-shadow">
+    <Card className={`hover:shadow-md transition-shadow ${isSelected ? 'ring-2 ring-primary' : ''}`}>
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between gap-2">
-          <div className="flex-1 min-w-0">
+          <div className="flex items-start gap-3 flex-1 min-w-0">
+            {onSelectChange && (
+              <Checkbox
+                checked={isSelected}
+                onCheckedChange={(checked) => onSelectChange(job.id, !!checked)}
+                className="mt-1"
+              />
+            )}
+            <div className="flex-1 min-w-0">
             <CardTitle className="text-lg leading-tight line-clamp-2">
               <button
                 onClick={() => onViewDetails(job)}
@@ -43,6 +56,7 @@ export function JobCard({
             <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1">
               <Building2 className="h-3.5 w-3.5" />
               <span className="truncate">{job.company}</span>
+            </div>
             </div>
           </div>
           {job.match && (
