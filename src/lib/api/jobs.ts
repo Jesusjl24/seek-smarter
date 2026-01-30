@@ -32,25 +32,53 @@ export async function upsertJobs(
   let newCount = 0;
   let existingCount = 0;
 
-  for (const job of scrapedJobs) {
-    const { data: existing } = await supabase
-      .from("jobs")
-      .select("id")
-      .eq("seek_job_id", job.seek_job_id)
-      .maybeSingle();
+  console.log('Upserting', scrapedJobs.length, 'jobs');
 
-    if (existing) {
-      await supabase
+  for (const job of scrapedJobs) {
+    try {
+      const { data: existing } = await supabase
         .from("jobs")
-        .update({ date_scraped: new Date().toISOString() })
-        .eq("seek_job_id", job.seek_job_id);
-      existingCount++;
-    } else {
-      await supabase.from("jobs").insert(job);
-      newCount++;
+        .select("id")
+        .eq("seek_job_id", job.seek_job_id)
+        .maybeSingle();
+
+      if (existing) {
+        const { error: updateError } = await supabase
+          .from("jobs")
+          .update({ date_scraped: new Date().toISOString() })
+          .eq("seek_job_id", job.seek_job_id);
+        
+        if (updateError) {
+          console.error('Error updating job:', updateError);
+        } else {
+          existingCount++;
+        }
+      } else {
+        const { error: insertError } = await supabase.from("jobs").insert({
+          seek_job_id: job.seek_job_id,
+          title: job.title,
+          company: job.company,
+          location: job.location,
+          salary_range: job.salary_range || null,
+          work_type: job.work_type || null,
+          work_arrangement: job.work_arrangement || null,
+          description_snippet: job.description_snippet || '',
+          job_url: job.job_url,
+          date_posted: job.date_posted || null,
+        });
+        
+        if (insertError) {
+          console.error('Error inserting job:', job.seek_job_id, insertError);
+        } else {
+          newCount++;
+        }
+      }
+    } catch (error) {
+      console.error('Error processing job:', job.seek_job_id, error);
     }
   }
 
+  console.log('Upsert complete: new =', newCount, ', existing =', existingCount);
   return { newCount, existingCount };
 }
 
