@@ -71,7 +71,7 @@ serve(async (req) => {
     const seekUrl = `https://www.seek.com.au/${keywords.toLowerCase().replace(/\s+/g, '-')}-jobs?${searchParams.toString()}`;
     console.log('Scraping SEEK URL:', seekUrl);
 
-    // Use Firecrawl with JSON extraction for structured data
+    // Use Firecrawl to scrape SEEK with extract for structured data
     const response = await fetch('https://api.firecrawl.dev/v1/scrape', {
       method: 'POST',
       headers: {
@@ -80,21 +80,32 @@ serve(async (req) => {
       },
       body: JSON.stringify({
         url: seekUrl,
-        formats: ['markdown', 'html', { 
-          type: 'json',
-          prompt: `Extract all job listings from this SEEK job search results page. For each job, extract:
-- title: the job title/position name
-- company: the company/employer name
-- location: the job location (city, state, or area)
-- salary: salary range if shown (e.g., "$80,000 - $100,000")
-- workType: employment type (Full-time, Part-time, Contract, Casual)
-- workArrangement: remote/hybrid/on-site if mentioned
-- snippet: a brief description or key requirements
-- jobId: the SEEK job ID (numeric ID from the job link)
-- datePosted: when the job was posted (e.g., "1d ago", "Just posted")
-
-Return an array of job objects. Include as many jobs as you can find on the page.`
-        }],
+        formats: ['markdown', 'html', 'extract'],
+        extract: {
+          prompt: `Extract all job listings from this SEEK job search results page. For each job, extract the title, company name, location, salary if shown, work type (Full-time/Part-time/Contract), work arrangement (Remote/Hybrid/On-site), a brief description snippet, the SEEK job ID (numeric ID from the URL), and when it was posted.`,
+          schema: {
+            type: 'object',
+            properties: {
+              jobs: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    title: { type: 'string' },
+                    company: { type: 'string' },
+                    location: { type: 'string' },
+                    salary: { type: 'string' },
+                    workType: { type: 'string' },
+                    workArrangement: { type: 'string' },
+                    snippet: { type: 'string' },
+                    jobId: { type: 'string' },
+                    datePosted: { type: 'string' }
+                  }
+                }
+              }
+            }
+          }
+        },
         onlyMainContent: true,
         waitFor: 5000,
       }),
@@ -136,12 +147,13 @@ Return an array of job objects. Include as many jobs as you can find on the page
 function parseSeekJobs(data: any, limit: number): ScrapedJob[] {
   const jobs: ScrapedJob[] = [];
   
-  // Try to use the JSON extraction first
-  if (data?.json) {
-    console.log('Using JSON extraction data');
-    const jsonJobs = Array.isArray(data.json) ? data.json : data.json.jobs || [];
+  // Try to use the extract data first
+  const extractedJobs = data?.extract?.jobs || data?.json?.jobs || (Array.isArray(data?.extract) ? data.extract : null) || (Array.isArray(data?.json) ? data.json : null);
+  
+  if (extractedJobs && Array.isArray(extractedJobs)) {
+    console.log('Using extracted data, found', extractedJobs.length, 'jobs');
     
-    for (const job of jsonJobs) {
+    for (const job of extractedJobs) {
       if (jobs.length >= limit) break;
       
       const jobId = extractJobId(job.jobId || job.id || job.link || '');
