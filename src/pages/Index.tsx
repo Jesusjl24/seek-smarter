@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { SearchBar } from "@/components/search/SearchBar";
 import { SearchFiltersPanel } from "@/components/search/SearchFilters";
+import { SearchProgress } from "@/components/search/SearchProgress";
 import { JobList } from "@/components/jobs/JobList";
 import { JobStats } from "@/components/sidebar/JobStats";
 import { ActionButtons } from "@/components/sidebar/ActionButtons";
@@ -402,8 +403,10 @@ const Index = () => {
   }
 
   return (
-    <AppLayout sidebar={sidebar}>
-      <div className="space-y-6">
+    <>
+      <SearchProgress isSearching={isSearching} />
+      <AppLayout sidebar={sidebar}>
+        <div className="space-y-6">
         <SearchBar
           keywords={filters.keywords}
           location={filters.location}
@@ -432,8 +435,9 @@ const Index = () => {
           newlyScoredJobId={newlyScoredJobId}
           onScoredJobViewed={() => setNewlyScoredJobId(null)}
         />
-      </div>
-    </AppLayout>
+        </div>
+      </AppLayout>
+    </>
   );
 };
 
