@@ -30,6 +30,7 @@ const Index = () => {
   const [isScoringAll, setIsScoringAll] = useState(false);
   const [scoringJobId, setScoringJobId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [newlyScoredJobId, setNewlyScoredJobId] = useState<string | null>(null);
   const { toast } = useToast();
 
   // Load initial data
@@ -175,6 +176,9 @@ const Index = () => {
               : j
           )
         );
+
+        // Show the analysis popup
+        setNewlyScoredJobId(jobId);
 
         toast({
           title: "Job scored",
@@ -425,6 +429,8 @@ const Index = () => {
           onDelete={handleDeleteJob}
           scoringJobId={scoringJobId}
           hasResume={!!profile}
+          newlyScoredJobId={newlyScoredJobId}
+          onScoredJobViewed={() => setNewlyScoredJobId(null)}
         />
       </div>
     </AppLayout>

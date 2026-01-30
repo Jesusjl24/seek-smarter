@@ -1,11 +1,12 @@
 import { useState, useRef } from "react";
-import { Upload, FileText, RefreshCw, Check } from "lucide-react";
+import { Upload, FileText, RefreshCw, Check, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { saveResumeProfile } from "@/lib/api/resume";
+import { ResumeViewModal } from "./ResumeViewModal";
 import type { ResumeProfile } from "@/types/job";
 import { formatDistanceToNow } from "date-fns";
 
@@ -16,6 +17,7 @@ interface ResumeUploadProps {
 
 export function ResumeUpload({ profile, onProfileUpdate }: ResumeUploadProps) {
   const [isUploading, setIsUploading] = useState(false);
+  const [showViewModal, setShowViewModal] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
@@ -98,75 +100,96 @@ export function ResumeUpload({ profile, onProfileUpdate }: ResumeUploadProps) {
   };
 
   return (
-    <Card>
-      <CardHeader className="pb-3">
-        <CardTitle className="text-sm flex items-center gap-2">
-          <FileText className="h-4 w-4" />
-          Resume
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        {profile ? (
-          <div className="space-y-2">
-            <div className="flex items-center gap-2 text-sm">
-              <Check className="h-4 w-4 text-green-500" />
-              <span className="text-muted-foreground">
-                Updated{" "}
-                {formatDistanceToNow(new Date(profile.updated_at), {
-                  addSuffix: true,
-                })}
-              </span>
-            </div>
-            {profile.summary && (
-              <p className="text-xs text-muted-foreground line-clamp-2">
-                {profile.summary}
-              </p>
-            )}
-            <div className="flex flex-wrap gap-1">
-              {profile.skills_technical.slice(0, 3).map((skill) => (
-                <Badge key={skill} variant="secondary" className="text-xs">
-                  {skill}
-                </Badge>
-              ))}
-              {profile.skills_technical.length > 3 && (
-                <Badge variant="outline" className="text-xs">
-                  +{profile.skills_technical.length - 3} more
-                </Badge>
+    <>
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm flex items-center gap-2">
+            <FileText className="h-4 w-4" />
+            Resume
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {profile ? (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 text-sm">
+                <Check className="h-4 w-4 text-green-500" />
+                <span className="text-muted-foreground">
+                  Updated{" "}
+                  {formatDistanceToNow(new Date(profile.updated_at), {
+                    addSuffix: true,
+                  })}
+                </span>
+              </div>
+              {profile.summary && (
+                <p className="text-xs text-muted-foreground line-clamp-2">
+                  {profile.summary}
+                </p>
               )}
+              <div className="flex flex-wrap gap-1">
+                {profile.skills_technical.slice(0, 3).map((skill) => (
+                  <Badge key={skill} variant="secondary" className="text-xs">
+                    {skill}
+                  </Badge>
+                ))}
+                {profile.skills_technical.length > 3 && (
+                  <Badge variant="outline" className="text-xs">
+                    +{profile.skills_technical.length - 3} more
+                  </Badge>
+                )}
+              </div>
             </div>
-          </div>
-        ) : (
-          <p className="text-sm text-muted-foreground">No resume uploaded</p>
-        )}
-
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept=".pdf,.docx,.txt"
-          onChange={handleFileSelect}
-          className="hidden"
-        />
-
-        <Button
-          variant={profile ? "outline" : "default"}
-          size="sm"
-          className="w-full"
-          onClick={() => fileInputRef.current?.click()}
-          disabled={isUploading}
-        >
-          {isUploading ? (
-            <>
-              <RefreshCw className="h-4 w-4 animate-spin mr-2" />
-              Parsing...
-            </>
           ) : (
-            <>
-              <Upload className="h-4 w-4 mr-2" />
-              {profile ? "Upload New" : "Upload Resume"}
-            </>
+            <p className="text-sm text-muted-foreground">No resume uploaded</p>
           )}
-        </Button>
-      </CardContent>
-    </Card>
+
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".pdf,.docx,.txt"
+            onChange={handleFileSelect}
+            className="hidden"
+          />
+
+          <div className="flex gap-2">
+            {profile && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex-1"
+                onClick={() => setShowViewModal(true)}
+              >
+                <Eye className="h-4 w-4 mr-2" />
+                View
+              </Button>
+            )}
+            <Button
+              variant={profile ? "outline" : "default"}
+              size="sm"
+              className="flex-1"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isUploading}
+            >
+              {isUploading ? (
+                <>
+                  <RefreshCw className="h-4 w-4 animate-spin mr-2" />
+                  Parsing...
+                </>
+              ) : (
+                <>
+                  <Upload className="h-4 w-4 mr-2" />
+                  {profile ? "Upload New" : "Upload Resume"}
+                </>
+              )}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <ResumeViewModal
+        profile={profile}
+        open={showViewModal}
+        onClose={() => setShowViewModal(false)}
+      />
+    </>
   );
 }
