@@ -54,6 +54,7 @@ export interface SearchFilters {
   workArrangements: string[];
   minSalary: string;
   datePosted: string;
+  jobLimit: string;
 }
 
 export interface ScrapedJob {

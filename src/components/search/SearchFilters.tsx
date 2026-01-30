@@ -33,6 +33,12 @@ const DATE_OPTIONS = [
   { value: "14", label: "Last 14 days" },
   { value: "30", label: "Last 30 days" },
 ];
+const JOB_LIMIT_OPTIONS = [
+  { value: "10", label: "10 jobs" },
+  { value: "20", label: "20 jobs" },
+  { value: "30", label: "30 jobs" },
+  { value: "50", label: "50 jobs" },
+];
 
 export function SearchFiltersPanel({
   filters,
@@ -131,6 +137,27 @@ export function SearchFiltersPanel({
           <SelectContent>
             {DATE_OPTIONS.map((option) => (
               <SelectItem key={option.value} value={option.value || "any"}>
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div>
+        <h3 className="font-semibold mb-3 text-sm">Jobs to Scrape</h3>
+        <Select
+          value={filters.jobLimit || "20"}
+          onValueChange={(value) =>
+            onFiltersChange({ ...filters, jobLimit: value })
+          }
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="20 jobs" />
+          </SelectTrigger>
+          <SelectContent>
+            {JOB_LIMIT_OPTIONS.map((option) => (
+              <SelectItem key={option.value} value={option.value}>
                 {option.label}
               </SelectItem>
             ))}

@@ -11,7 +11,7 @@ serve(async (req) => {
   }
 
   try {
-    const { keywords, location, filters } = await req.json();
+    const { keywords, location, filters, limit = 20 } = await req.json();
 
     if (!keywords) {
       return new Response(
@@ -88,8 +88,9 @@ serve(async (req) => {
     }
 
     // Parse the scraped content to extract job listings
-    const jobs = parseSeekJobs(scrapeData.data?.html || '', scrapeData.data?.markdown || '', seekUrl);
-    console.log(`Parsed ${jobs.length} jobs from SEEK`);
+    const jobLimit = Math.min(Math.max(parseInt(limit) || 20, 1), 50);
+    const jobs = parseSeekJobs(scrapeData.data?.html || '', scrapeData.data?.markdown || '', seekUrl, jobLimit);
+    console.log(`Parsed ${jobs.length} jobs from SEEK (limit: ${jobLimit})`);
 
     return new Response(
       JSON.stringify({ success: true, jobs }),
@@ -118,7 +119,7 @@ interface ScrapedJob {
   date_posted?: string;
 }
 
-function parseSeekJobs(html: string, markdown: string, baseUrl: string): ScrapedJob[] {
+function parseSeekJobs(html: string, markdown: string, baseUrl: string, limit: number = 20): ScrapedJob[] {
   const jobs: ScrapedJob[] = [];
   
   // Try to extract job IDs from the HTML/markdown
@@ -237,7 +238,7 @@ function parseSeekJobs(html: string, markdown: string, baseUrl: string): Scraped
   // If we found job IDs but couldn't parse details, create basic entries
   if (jobs.length === 0 && foundIds.size > 0) {
     let index = 0;
-    for (const jobId of Array.from(foundIds).slice(0, 20)) {
+    for (const jobId of Array.from(foundIds).slice(0, limit)) {
       jobs.push({
         seek_job_id: jobId,
         title: `Job Listing #${index + 1}`,
@@ -250,6 +251,6 @@ function parseSeekJobs(html: string, markdown: string, baseUrl: string): Scraped
     }
   }
 
-  // Limit to 20 jobs max
-  return jobs.slice(0, 20);
+  // Apply limit
+  return jobs.slice(0, limit);
 }

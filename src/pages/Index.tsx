@@ -21,6 +21,7 @@ const defaultFilters: SearchFilters = {
   workArrangements: [],
   minSalary: "",
   datePosted: "",
+  jobLimit: "20",
 };
 
 const Index = () => {
@@ -74,6 +75,7 @@ const Index = () => {
         body: {
           keywords: filters.keywords,
           location: filters.location,
+          limit: parseInt(filters.jobLimit) || 20,
           filters: {
             workTypes: filters.workTypes,
             workArrangements: filters.workArrangements,
@@ -305,6 +307,27 @@ const Index = () => {
     [toast]
   );
 
+  const handleDeleteMultiple = useCallback(
+    async (jobIds: string[]) => {
+      try {
+        await Promise.all(jobIds.map((id) => deleteJob(id)));
+        setJobs((prev) => prev.filter((j) => !jobIds.includes(j.id)));
+        toast({
+          title: "Jobs deleted",
+          description: `${jobIds.length} job${jobIds.length > 1 ? 's' : ''} removed from your list.`,
+        });
+      } catch (error) {
+        console.error("Delete error:", error);
+        toast({
+          title: "Delete failed",
+          description: "Failed to delete some jobs.",
+          variant: "destructive",
+        });
+      }
+    },
+    [toast]
+  );
+
   const handleExport = useCallback(() => {
     if (jobs.length === 0) return;
 
@@ -430,6 +453,7 @@ const Index = () => {
           jobs={jobs}
           onScore={handleScoreJob}
           onDelete={handleDeleteJob}
+          onDeleteMultiple={handleDeleteMultiple}
           scoringJobId={scoringJobId}
           hasResume={!!profile}
           newlyScoredJobId={newlyScoredJobId}
