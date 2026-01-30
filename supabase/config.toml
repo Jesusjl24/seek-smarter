@@ -1,1 +1,10 @@
 project_id = "togfkxibnivqzevpujzd"
+
+[functions.scrape-seek]
+verify_jwt = false
+
+[functions.parse-resume]
+verify_jwt = false
+
+[functions.score-job]
+verify_jwt = false
