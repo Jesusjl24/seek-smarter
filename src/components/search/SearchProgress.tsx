@@ -1,25 +1,39 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Progress } from "@/components/ui/progress";
 import { Loader2 } from "lucide-react";
 
 interface SearchProgressProps {
   isSearching: boolean;
+  jobLimit?: number;
 }
 
-const stages = [
-  { message: "Connecting to SEEK...", progress: 10 },
-  { message: "Loading search results...", progress: 25 },
-  { message: "Scraping job listing 1...", progress: 35 },
-  { message: "Scraping job listing 5...", progress: 45 },
-  { message: "Scraping job listing 10...", progress: 55 },
-  { message: "Scraping job listing 15...", progress: 70 },
-  { message: "Scraping job listing 20...", progress: 85 },
-  { message: "Processing results...", progress: 95 },
-];
+function generateStages(limit: number) {
+  const stages = [
+    { message: "Connecting to SEEK...", progress: 10 },
+    { message: "Loading search results...", progress: 20 },
+  ];
 
-export function SearchProgress({ isSearching }: SearchProgressProps) {
+  // Generate scraping stages based on actual job limit
+  const scrapingSteps = Math.min(5, Math.ceil(limit / 5)); // Max 5 intermediate steps
+  const progressPerStep = 60 / (scrapingSteps + 1); // 60% of progress for scraping
+  
+  for (let i = 1; i <= scrapingSteps; i++) {
+    const jobNumber = Math.min(Math.round((i / scrapingSteps) * limit), limit);
+    const progress = Math.round(20 + (i * progressPerStep));
+    stages.push({ message: `Scraping job listing ${jobNumber} of ${limit}...`, progress });
+  }
+
+  stages.push({ message: "Processing results...", progress: 90 });
+  stages.push({ message: "Saving to database...", progress: 95 });
+
+  return stages;
+}
+
+export function SearchProgress({ isSearching, jobLimit = 20 }: SearchProgressProps) {
   const [stageIndex, setStageIndex] = useState(0);
   const [progress, setProgress] = useState(0);
+
+  const stages = useMemo(() => generateStages(jobLimit), [jobLimit]);
 
   useEffect(() => {
     if (!isSearching) {
@@ -44,7 +58,7 @@ export function SearchProgress({ isSearching }: SearchProgressProps) {
     }, 1200);
 
     return () => clearInterval(interval);
-  }, [isSearching]);
+  }, [isSearching, stages]);
 
   if (!isSearching) return null;
 
@@ -73,7 +87,7 @@ export function SearchProgress({ isSearching }: SearchProgressProps) {
           </div>
 
           <p className="text-xs text-muted-foreground">
-            This may take a moment...
+            Scraping {jobLimit} jobs...
           </p>
         </div>
       </div>
