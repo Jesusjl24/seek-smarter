@@ -23,8 +23,6 @@ interface DiagnosticInfo {
   url_scraped?: string;
   firecrawl_status?: number;
   markdown_length?: number;
-  html_length?: number;
-  extract_data?: any;
   job_ids_found?: number;
   possible_blocking?: boolean;
   raw_sample?: string;
@@ -87,7 +85,8 @@ serve(async (req) => {
     console.log('Scraping SEEK URL:', seekUrl);
     console.log('Filters:', JSON.stringify(filters));
 
-    // Use Firecrawl with actions and location settings for Australian content
+    // Use Firecrawl with minimal config to avoid timeouts
+    // SEEK is JS-heavy, so we use a fast scrape and parse markdown ourselves
     const response = await fetch('https://api.firecrawl.dev/v1/scrape', {
       method: 'POST',
       headers: {
@@ -96,51 +95,16 @@ serve(async (req) => {
       },
       body: JSON.stringify({
         url: seekUrl,
-        formats: ['markdown', 'html', 'extract'],
-        // Wait for dynamic content to load, then scroll
-        actions: [
-          { type: 'wait', milliseconds: 4000 },
-          { type: 'scroll', direction: 'down' },
-          { type: 'wait', milliseconds: 2000 },
-          { type: 'scroll', direction: 'down' },
-          { type: 'wait', milliseconds: 2000 },
-        ],
-        extract: {
-          prompt: `You are viewing a SEEK.com.au job search results page. Extract ALL job listings visible on the page. Each job card shows: job title (as a link), company name, location, salary (if shown), work type, and a snippet. For each job, extract the SEEK job ID which is a number in the job URL (e.g., /job/12345678). Return all jobs you can find.`,
-          schema: {
-            type: 'object',
-            properties: {
-              jobs: {
-                type: 'array',
-                items: {
-                  type: 'object',
-                  properties: {
-                    title: { type: 'string', description: 'Job title' },
-                    company: { type: 'string', description: 'Company name' },
-                    location: { type: 'string', description: 'Job location' },
-                    salary: { type: 'string', description: 'Salary if shown' },
-                    workType: { type: 'string', description: 'Full-time, Part-time, Contract, etc.' },
-                    workArrangement: { type: 'string', description: 'Remote, Hybrid, On-site' },
-                    snippet: { type: 'string', description: 'Job description snippet' },
-                    jobId: { type: 'string', description: 'Numeric SEEK job ID from URL' },
-                    datePosted: { type: 'string', description: 'When the job was posted' }
-                  },
-                  required: ['title', 'jobId']
-                }
-              }
-            },
-            required: ['jobs']
-          }
-        },
-        // Set Australian location to avoid geo-blocking
+        formats: ['markdown', 'links'],
+        // Minimal wait - just enough for initial content
+        waitFor: 3000,
+        timeout: 30000,
+        // Australian location
         location: {
           country: 'AU',
           languages: ['en-AU']
         },
         onlyMainContent: false,
-        waitFor: 5000,
-        timeout: 60000,
-        blockAds: true,
       }),
     });
 
@@ -153,21 +117,19 @@ serve(async (req) => {
     
     const data = scrapeData.data || scrapeData;
     const markdown = data?.markdown || '';
-    const html = data?.html || '';
-    const extractData = data?.extract || data?.json;
+    const links = data?.links || [];
     
     console.log('Markdown length:', markdown.length);
-    console.log('HTML length:', html.length);
-    console.log('Extract data:', JSON.stringify(extractData, null, 2));
+    console.log('Links found:', links.length);
     
     if (markdown.length > 0) {
       console.log('Markdown sample (first 500 chars):', markdown.substring(0, 500));
     }
 
-    // Check for blocking/CAPTCHA indicators
+    // Check for blocking/CAPTCHA indicators in markdown
     const blockingIndicators = ['Cloudflare', 'captcha', 'CAPTCHA', 'Access Denied', 'blocked', 'Please verify'];
     const possibleBlocking = blockingIndicators.some(indicator => 
-      html.includes(indicator) || markdown.includes(indicator)
+      markdown.includes(indicator)
     );
     
     if (possibleBlocking) {
@@ -208,8 +170,6 @@ serve(async (req) => {
       url_scraped: seekUrl,
       firecrawl_status: response.status,
       markdown_length: markdown.length,
-      html_length: html.length,
-      extract_data: extractData ? 'present' : 'empty',
       job_ids_found: jobs.length,
       possible_blocking: possibleBlocking,
     };
@@ -220,9 +180,9 @@ serve(async (req) => {
       // Provide specific diagnostic messages
       if (possibleBlocking) {
         diagnostics.message = 'Page may be blocked by anti-bot protection (Cloudflare/CAPTCHA detected)';
-      } else if (markdown.length < 100 && html.length < 100) {
+      } else if (markdown.length < 100) {
         diagnostics.message = 'Page returned very little content - may be blocked or loading issue';
-      } else if (!extractData || (Array.isArray(extractData?.jobs) && extractData.jobs.length === 0)) {
+      } else {
         diagnostics.message = 'Content loaded but no job data could be extracted - SEEK page structure may have changed';
       }
     }
@@ -259,65 +219,24 @@ function parseSeekJobs(data: any, limit: number): ScrapedJob[] {
   
   console.log('=== PARSING ATTEMPT ===');
   
-  // Try to use the extract data first (multiple possible locations)
-  const extractedJobs = 
-    data?.extract?.jobs || 
-    data?.json?.jobs || 
-    (Array.isArray(data?.extract) ? data.extract : null) || 
-    (Array.isArray(data?.json) ? data.json : null);
-  
-  if (extractedJobs && Array.isArray(extractedJobs) && extractedJobs.length > 0) {
-    console.log('Using LLM extracted data, found', extractedJobs.length, 'jobs');
-    
-    for (const job of extractedJobs) {
-      if (jobs.length >= limit) break;
-      
-      const jobId = extractJobId(job.jobId || job.id || job.link || job.url || '');
-      if (!jobId) {
-        console.log('Skipping job - no valid ID:', JSON.stringify(job));
-        continue;
-      }
-      
-      jobs.push({
-        seek_job_id: jobId,
-        title: cleanText(job.title || job.jobTitle) || 'Untitled Position',
-        company: cleanText(job.company || job.employer || job.companyName) || 'Unknown Company',
-        location: cleanText(job.location || job.area) || 'Australia',
-        salary_range: cleanText(job.salary || job.salaryRange),
-        work_type: cleanText(job.workType || job.employmentType),
-        work_arrangement: cleanText(job.workArrangement || job.remote),
-        description_snippet: cleanText(job.snippet || job.description || job.summary) || '',
-        job_url: `https://www.seek.com.au/job/${jobId}`,
-        date_posted: job.datePosted || job.postedDate,
-      });
-    }
-    
-    if (jobs.length > 0) {
-      return jobs.slice(0, limit);
-    }
-  }
-  
-  // Fallback to parsing markdown/HTML
-  console.log('Falling back to markdown/HTML parsing');
-  const html = data?.html || '';
   const markdown = data?.markdown || '';
+  const links = data?.links || [];
   
-  // Collect all job IDs from various sources
+  // Collect all job IDs from links and markdown
   const foundIds = new Set<string>();
   
-  // Pattern 1: /job/ID in URLs
-  const jobIdPattern = /\/job\/(\d+)/g;
-  let match;
-  while ((match = jobIdPattern.exec(html)) !== null) {
-    foundIds.add(match[1]);
-  }
-  while ((match = jobIdPattern.exec(markdown)) !== null) {
-    foundIds.add(match[1]);
+  // Extract job IDs from links array
+  for (const link of links) {
+    const match = link.match(/\/job\/(\d+)/);
+    if (match) {
+      foundIds.add(match[1]);
+    }
   }
   
-  // Pattern 2: data-job-id attributes
-  const dataJobIdPattern = /data-job-id=["']?(\d+)["']?/g;
-  while ((match = dataJobIdPattern.exec(html)) !== null) {
+  // Also search markdown for job IDs
+  const jobIdPattern = /\/job\/(\d+)/g;
+  let match;
+  while ((match = jobIdPattern.exec(markdown)) !== null) {
     foundIds.add(match[1]);
   }
   
