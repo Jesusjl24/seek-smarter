@@ -42,7 +42,7 @@ serve(async (req) => {
       );
     }
 
-    // Build SEEK search URL
+    // Build SEEK search URL - use proper query string format
     const searchParams = new URLSearchParams();
     searchParams.set('keywords', keywords);
     if (location) searchParams.set('where', location);
@@ -68,7 +68,8 @@ serve(async (req) => {
       searchParams.set('daterange', filters.datePosted);
     }
 
-    const seekUrl = `https://www.seek.com.au/${keywords.toLowerCase().replace(/\s+/g, '-')}-jobs?${searchParams.toString()}`;
+    // Use the standard SEEK search URL format (not the SEO-friendly slug format)
+    const seekUrl = `https://www.seek.com.au/jobs?${searchParams.toString()}`;
     console.log('Scraping SEEK URL:', seekUrl);
 
     // Use Firecrawl to scrape SEEK with extract for structured data
