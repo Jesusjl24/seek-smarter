@@ -427,7 +427,7 @@ const Index = () => {
 
   return (
     <>
-      <SearchProgress isSearching={isSearching} />
+      <SearchProgress isSearching={isSearching} jobLimit={parseInt(filters.jobLimit) || 20} />
       <AppLayout sidebar={sidebar}>
         <div className="space-y-6">
         <SearchBar
