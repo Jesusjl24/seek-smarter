@@ -50,9 +50,11 @@ export interface JobWithMatch extends Job {
 export interface SearchFilters {
   keywords: string;
   location: string;
-  workTypes: string[];
-  workArrangements: string[];
-  minSalary: string;
+  workType: string; // single selection: full-time, part-time, contract, casual
+  workArrangement: string; // single selection: on-site, hybrid, remote
+  salaryMin: string;
+  salaryMax: string;
+  salaryType: string; // annual, monthly, hourly
   datePosted: string;
   jobLimit: string;
 }
