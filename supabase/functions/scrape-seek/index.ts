@@ -42,49 +42,44 @@ serve(async (req) => {
       );
     }
 
-    // Build SEEK URL in their exact format:
-    // https://www.seek.com.au/{keywords-slug}-jobs/{work-type}?daterange=X&salaryrange=X-X&salarytype=annual
+    // Build SEEK URL using the query-param format that works reliably with Firecrawl
+    // Format: https://www.seek.com.au/jobs?keywords=X&where=Y&worktype=full-time&salaryrange=X-Y&salarytype=annual&daterange=7
     
-    // Create keyword slug
-    const keywordSlug = keywords.toLowerCase().trim().replace(/\s+/g, '-');
-    
-    // Build path segments
-    let pathSegments = [`${keywordSlug}-jobs`];
-    
-    // Add work type to path if specified (SEEK uses path, not query param)
-    if (filters?.workType && filters.workType !== 'any') {
-      pathSegments.push(filters.workType);
-    }
-    
-    // Build query parameters
     const queryParams = new URLSearchParams();
     
-    // Add location
+    // Required: keywords
+    queryParams.set('keywords', keywords);
+    
+    // Optional: location
     if (location) {
       queryParams.set('where', location);
     }
     
-    // Add work arrangement (remote options)
-    if (filters?.workArrangement && filters.workArrangement !== 'any') {
+    // Optional: work type (full-time, part-time, contract, casual)
+    if (filters?.workType && filters.workType !== 'any' && filters.workType !== '') {
+      queryParams.set('worktype', filters.workType);
+    }
+    
+    // Optional: work arrangement (on-site, hybrid, remote)
+    if (filters?.workArrangement && filters.workArrangement !== 'any' && filters.workArrangement !== '') {
       queryParams.set('workarrangement', filters.workArrangement);
     }
     
-    // Add salary range (format: salaryrange=100000-200000&salarytype=annual)
-    const salaryMin = filters?.salaryMin && filters.salaryMin !== 'any' ? filters.salaryMin : '';
-    const salaryMax = filters?.salaryMax && filters.salaryMax !== 'any' ? filters.salaryMax : '';
+    // Optional: salary range (format: salaryrange=100000-200000&salarytype=annual)
+    const salaryMin = filters?.salaryMin && filters.salaryMin !== 'any' && filters.salaryMin !== '' ? filters.salaryMin : '';
+    const salaryMax = filters?.salaryMax && filters.salaryMax !== 'any' && filters.salaryMax !== '' ? filters.salaryMax : '';
     
     if (salaryMin || salaryMax) {
       queryParams.set('salaryrange', `${salaryMin}-${salaryMax}`);
       queryParams.set('salarytype', filters?.salaryType || 'annual');
     }
     
-    // Add date range
-    if (filters?.datePosted && filters.datePosted !== 'any') {
+    // Optional: date range (1, 3, 7, 14, 30)
+    if (filters?.datePosted && filters.datePosted !== 'any' && filters.datePosted !== '') {
       queryParams.set('daterange', filters.datePosted);
     }
 
-    const queryString = queryParams.toString();
-    const seekUrl = `https://www.seek.com.au/${pathSegments.join('/')}${queryString ? '?' + queryString : ''}`;
+    const seekUrl = `https://www.seek.com.au/jobs?${queryParams.toString()}`;
     console.log('Scraping SEEK URL:', seekUrl);
 
     // Use Firecrawl to scrape SEEK with extract for structured data
