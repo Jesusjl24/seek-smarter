@@ -87,7 +87,7 @@ serve(async (req) => {
     console.log('Scraping SEEK URL:', seekUrl);
     console.log('Filters:', JSON.stringify(filters));
 
-    // Use Firecrawl with scroll actions to handle dynamic content
+    // Use Firecrawl with actions and location settings for Australian content
     const response = await fetch('https://api.firecrawl.dev/v1/scrape', {
       method: 'POST',
       headers: {
@@ -97,18 +97,16 @@ serve(async (req) => {
       body: JSON.stringify({
         url: seekUrl,
         formats: ['markdown', 'html', 'extract'],
-        // Add scroll actions to trigger lazy-loaded content
+        // Wait for dynamic content to load, then scroll
         actions: [
-          { type: 'wait', milliseconds: 3000 },
-          { type: 'scroll', direction: 'down', amount: 1000 },
+          { type: 'wait', milliseconds: 4000 },
+          { type: 'scroll', direction: 'down' },
           { type: 'wait', milliseconds: 2000 },
-          { type: 'scroll', direction: 'down', amount: 1000 },
+          { type: 'scroll', direction: 'down' },
           { type: 'wait', milliseconds: 2000 },
-          { type: 'scroll', direction: 'down', amount: 1000 },
-          { type: 'wait', milliseconds: 1000 },
         ],
         extract: {
-          prompt: `Extract all job listings from this SEEK job search results page. For each job, extract the title, company name, location, salary if shown, work type (Full-time/Part-time/Contract), work arrangement (Remote/Hybrid/On-site), a brief description snippet, the SEEK job ID (numeric ID from the URL), and when it was posted.`,
+          prompt: `You are viewing a SEEK.com.au job search results page. Extract ALL job listings visible on the page. Each job card shows: job title (as a link), company name, location, salary (if shown), work type, and a snippet. For each job, extract the SEEK job ID which is a number in the job URL (e.g., /job/12345678). Return all jobs you can find.`,
           schema: {
             type: 'object',
             properties: {
@@ -117,23 +115,32 @@ serve(async (req) => {
                 items: {
                   type: 'object',
                   properties: {
-                    title: { type: 'string' },
-                    company: { type: 'string' },
-                    location: { type: 'string' },
-                    salary: { type: 'string' },
-                    workType: { type: 'string' },
-                    workArrangement: { type: 'string' },
-                    snippet: { type: 'string' },
-                    jobId: { type: 'string' },
-                    datePosted: { type: 'string' }
-                  }
+                    title: { type: 'string', description: 'Job title' },
+                    company: { type: 'string', description: 'Company name' },
+                    location: { type: 'string', description: 'Job location' },
+                    salary: { type: 'string', description: 'Salary if shown' },
+                    workType: { type: 'string', description: 'Full-time, Part-time, Contract, etc.' },
+                    workArrangement: { type: 'string', description: 'Remote, Hybrid, On-site' },
+                    snippet: { type: 'string', description: 'Job description snippet' },
+                    jobId: { type: 'string', description: 'Numeric SEEK job ID from URL' },
+                    datePosted: { type: 'string', description: 'When the job was posted' }
+                  },
+                  required: ['title', 'jobId']
                 }
               }
-            }
+            },
+            required: ['jobs']
           }
         },
-        onlyMainContent: true,
+        // Set Australian location to avoid geo-blocking
+        location: {
+          country: 'AU',
+          languages: ['en-AU']
+        },
+        onlyMainContent: false,
         waitFor: 5000,
+        timeout: 60000,
+        blockAds: true,
       }),
     });
 
