@@ -14,3 +14,6 @@ verify_jwt = false
 
 [functions.generate-cover-letter]
 verify_jwt = false
+
+[functions.proxy-storage]
+verify_jwt = false
