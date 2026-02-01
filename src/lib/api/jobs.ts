@@ -1,5 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
-import type { Job, JobWithMatch, JobMatch, ScrapedJob, PipelineStatus, PipelineCounts } from "@/types/job";
+import type { Job, JobWithMatch, JobMatch, ScrapedJob, PipelineStatus, PipelineCounts, JobArtifact, TailoredResume, CoverLetter, ResumeProfile, RubricScores } from "@/types/job";
 
 /**
  * Converts relative date strings like "3d ago", "1d ago", "Today", "Yesterday"
@@ -71,7 +71,10 @@ export async function fetchJobs(): Promise<JobWithMatch[]> {
 
   const matchMap = new Map<string, JobMatch>();
   matches?.forEach((match) => {
-    matchMap.set(match.job_id, match as JobMatch);
+    matchMap.set(match.job_id, {
+      ...match,
+      scores: match.scores as unknown as RubricScores | undefined,
+    } as JobMatch);
   });
 
   return (jobs || []).map((job) => ({
@@ -101,7 +104,10 @@ export async function fetchJobsByStatus(
 
   const matchMap = new Map<string, JobMatch>();
   matches?.forEach((match) => {
-    matchMap.set(match.job_id, match as JobMatch);
+    matchMap.set(match.job_id, {
+      ...match,
+      scores: match.scores as unknown as RubricScores | undefined,
+    } as JobMatch);
   });
 
   return (jobs || []).map((job) => ({
@@ -246,12 +252,108 @@ export async function updateJobNotes(
 }
 
 export async function saveJobMatch(match: Omit<JobMatch, "id" | "scored_at">): Promise<JobMatch> {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { scores, ...matchWithoutScores } = match;
+  const insertData: Record<string, unknown> = {
+    ...matchWithoutScores,
+    scores: scores ? scores : null,
+  };
+  
   const { data, error } = await supabase
     .from("job_matches")
-    .upsert(match, { onConflict: "job_id,resume_profile_id" })
+    .upsert(insertData as never, { onConflict: "job_id,resume_profile_id" })
     .select()
     .single();
 
   if (error) throw error;
-  return data as JobMatch;
+  return {
+    ...data,
+    scores: data.scores as unknown as RubricScores | undefined,
+  } as JobMatch;
+}
+
+// Fetch artifacts for a specific job
+export async function fetchJobArtifacts(jobId: string): Promise<JobArtifact[]> {
+  const { data, error } = await supabase
+    .from("job_artifacts")
+    .select("*")
+    .eq("job_id", jobId)
+    .order("created_at", { ascending: false });
+
+  if (error) throw error;
+  return (data || []) as unknown as JobArtifact[];
+}
+
+// Save a job artifact
+export async function saveJobArtifact(
+  artifact: Omit<JobArtifact, "id" | "created_at">
+): Promise<JobArtifact> {
+  const insertData: Record<string, unknown> = {
+    job_id: artifact.job_id,
+    artifact_type: artifact.artifact_type,
+    content: artifact.content,
+    agent: artifact.agent,
+    version: artifact.version,
+  };
+  
+  const { data, error } = await supabase
+    .from("job_artifacts")
+    .insert(insertData as never)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data as unknown as JobArtifact;
+}
+
+// Generate tailored resume via edge function
+export async function generateTailoredResume(
+  job: Job,
+  profile: ResumeProfile,
+  matchScore: number
+): Promise<TailoredResume> {
+  const { data, error } = await supabase.functions.invoke("tailor-resume", {
+    body: {
+      job: {
+        title: job.title,
+        company: job.company,
+        location: job.location,
+        description_snippet: job.description_snippet,
+        full_description: job.full_description,
+      },
+      profile,
+      match_score: matchScore,
+    },
+  });
+
+  if (error) throw error;
+  if (data?.error) throw new Error(data.error);
+  return data as TailoredResume;
+}
+
+// Generate cover letter via edge function
+export async function generateCoverLetter(
+  job: Job,
+  profile: ResumeProfile,
+  matchScore: number,
+  tailoredHighlights?: string[]
+): Promise<CoverLetter> {
+  const { data, error } = await supabase.functions.invoke("generate-cover-letter", {
+    body: {
+      job: {
+        title: job.title,
+        company: job.company,
+        location: job.location,
+        description_snippet: job.description_snippet,
+        full_description: job.full_description,
+      },
+      profile,
+      match_score: matchScore,
+      tailored_highlights: tailoredHighlights,
+    },
+  });
+
+  if (error) throw error;
+  if (data?.error) throw new Error(data.error);
+  return data as CoverLetter;
 }

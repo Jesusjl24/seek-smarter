@@ -8,3 +8,9 @@ verify_jwt = false
 
 [functions.score-job]
 verify_jwt = false
+
+[functions.tailor-resume]
+verify_jwt = false
+
+[functions.generate-cover-letter]
+verify_jwt = false

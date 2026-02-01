@@ -40,7 +40,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { MatchScoreBadge } from "./MatchScoreBadge";
 import { JobDetailModal } from "./JobDetailModal";
-import type { JobWithMatch, PipelineStatus } from "@/types/job";
+import { ArtifactGeneratorButtons } from "./ArtifactGeneratorButtons";
+import type { JobWithMatch, PipelineStatus, TailoredResume, CoverLetter, JobArtifact } from "@/types/job";
 
 interface JobsTableProps {
   jobs: JobWithMatch[];
@@ -50,11 +51,18 @@ interface JobsTableProps {
   onDelete: (jobId: string) => void;
   onDeleteMultiple: (jobIds: string[]) => void;
   showStageColumn?: boolean;
+  showAIColumn?: boolean;
   availableActions: {
     moveToInbox?: boolean;
     moveToShortlist?: boolean;
     moveToNotAFit?: boolean;
   };
+  // AI artifact generation
+  artifacts?: Map<string, JobArtifact[]>;
+  onGenerateResume?: (job: JobWithMatch) => Promise<TailoredResume>;
+  onGenerateCoverLetter?: (job: JobWithMatch) => Promise<CoverLetter>;
+  onViewResume?: (resume: TailoredResume) => void;
+  onViewCoverLetter?: (coverLetter: CoverLetter) => void;
 }
 
 type SortKey = "title" | "company" | "match_score" | "date_posted" | "updated_at";
@@ -79,7 +87,13 @@ export function JobsTable({
   onDelete,
   onDeleteMultiple,
   showStageColumn = true,
+  showAIColumn = false,
   availableActions,
+  artifacts,
+  onGenerateResume,
+  onGenerateCoverLetter,
+  onViewResume,
+  onViewCoverLetter,
 }: JobsTableProps) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState("");
@@ -88,6 +102,12 @@ export function JobsTable({
   const [editingNotesId, setEditingNotesId] = useState<string | null>(null);
   const [editingNotesValue, setEditingNotesValue] = useState("");
   const [selectedJob, setSelectedJob] = useState<JobWithMatch | null>(null);
+
+  // Helper to check if job has artifact
+  const getJobArtifact = (jobId: string, type: 'tailored_resume' | 'cover_letter') => {
+    const jobArtifacts = artifacts?.get(jobId) || [];
+    return jobArtifacts.find(a => a.artifact_type === type);
+  };
 
   // Filter and sort jobs
   const filteredJobs = useMemo(() => {
@@ -306,6 +326,7 @@ export function JobsTable({
               <TableHead>Work Type</TableHead>
               <TableHead>Salary</TableHead>
               <TableHead>Notes</TableHead>
+              {showAIColumn && <TableHead>AI</TableHead>}
               {showStageColumn && <TableHead>Stage</TableHead>}
               <TableHead className="w-20">Actions</TableHead>
             </TableRow>
@@ -371,6 +392,32 @@ export function JobsTable({
                     </button>
                   )}
                 </TableCell>
+                {showAIColumn && onGenerateResume && onGenerateCoverLetter && (
+                  <TableCell>
+                    <ArtifactGeneratorButtons
+                      matchScore={job.match?.match_score}
+                      hasResume={!!getJobArtifact(job.id, 'tailored_resume')}
+                      hasCoverLetter={!!getJobArtifact(job.id, 'cover_letter')}
+                      onGenerateResume={async () => {
+                        const result = await onGenerateResume(job);
+                        onViewResume?.(result);
+                      }}
+                      onGenerateCoverLetter={async () => {
+                        const result = await onGenerateCoverLetter(job);
+                        onViewCoverLetter?.(result);
+                      }}
+                      onViewResume={() => {
+                        const artifact = getJobArtifact(job.id, 'tailored_resume');
+                        if (artifact) onViewResume?.(artifact.content as TailoredResume);
+                      }}
+                      onViewCoverLetter={() => {
+                        const artifact = getJobArtifact(job.id, 'cover_letter');
+                        if (artifact) onViewCoverLetter?.(artifact.content as CoverLetter);
+                      }}
+                      compact
+                    />
+                  </TableCell>
+                )}
                 {showStageColumn && (
                   <TableCell>
                     <Select
