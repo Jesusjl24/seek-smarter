@@ -1,4 +1,4 @@
-import { ExternalLink, MapPin, Building2, Calendar, Trash2 } from "lucide-react";
+import { ExternalLink, MapPin, Building2, Calendar, Trash2, Star, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,6 +12,8 @@ interface JobCardProps {
   onScore: (jobId: string) => void;
   onDelete: (jobId: string) => void;
   onViewDetails: (job: JobWithMatch) => void;
+  onShortlist: (jobId: string) => void;
+  onNotAFit: (jobId: string) => void;
   isScoring: boolean;
   hasResume: boolean;
   isSelected?: boolean;
@@ -23,6 +25,8 @@ export function JobCard({
   onScore,
   onDelete,
   onViewDetails,
+  onShortlist,
+  onNotAFit,
   isScoring,
   hasResume,
   isSelected = false,
@@ -103,8 +107,24 @@ export function JobCard({
           {job.description_snippet}
         </p>
 
-        <div className="flex items-center justify-between pt-2">
-          <div className="flex gap-2">
+        <div className="flex items-center justify-between pt-2 flex-wrap gap-2">
+          <div className="flex gap-1.5 flex-wrap">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onShortlist(job.id)}
+              title="Move to Shortlist"
+            >
+              <Star className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onNotAFit(job.id)}
+              title="Move to Not a Fit"
+            >
+              <XCircle className="h-4 w-4" />
+            </Button>
             <Button
               variant="outline"
               size="sm"

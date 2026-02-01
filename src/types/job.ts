@@ -1,3 +1,16 @@
+// Pipeline status values
+export type PipelineStatus = 
+  | 'inbox' 
+  | 'shortlist' 
+  | 'not_fit' 
+  | 'applied' 
+  | 'screening' 
+  | 'interview' 
+  | 'final_interview' 
+  | 'offer' 
+  | 'rejected' 
+  | 'withdrawn';
+
 export interface Job {
   id: string;
   seek_job_id: string;
@@ -12,6 +25,9 @@ export interface Job {
   job_url: string;
   date_posted: string | null;
   date_scraped: string;
+  pipeline_status: PipelineStatus;
+  notes: string | null;
+  updated_at: string;
 }
 
 export interface ResumeProfile {
@@ -71,4 +87,14 @@ export interface ScrapedJob {
   full_description?: string;
   job_url: string;
   date_posted?: string;
+}
+
+// Pipeline counts for sidebar stats
+export interface PipelineCounts {
+  inbox: number;
+  shortlist: number;
+  not_fit: number;
+  applied: number;
+  interview: number;
+  offer: number;
 }
