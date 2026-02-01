@@ -82,3 +82,30 @@ export async function saveResumeProfile(
     return data as unknown as ResumeProfile;
   }
 }
+
+export async function deleteResumeProfile(profileId: string): Promise<void> {
+  // First get the profile to find the file path
+  const { data: profile, error: fetchError } = await supabase
+    .from("resume_profile")
+    .select("file_url")
+    .eq("id", profileId)
+    .single();
+
+  if (fetchError) throw fetchError;
+
+  // Delete file from storage if it exists
+  if (profile?.file_url) {
+    const fileName = profile.file_url.split('/').pop();
+    if (fileName) {
+      await supabase.storage.from("resumes").remove([fileName]);
+    }
+  }
+
+  // Delete the profile record
+  const { error } = await supabase
+    .from("resume_profile")
+    .delete()
+    .eq("id", profileId);
+
+  if (error) throw error;
+}

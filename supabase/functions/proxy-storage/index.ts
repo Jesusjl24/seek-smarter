@@ -53,6 +53,8 @@ serve(async (req) => {
         'Content-Type': contentType,
         'Content-Disposition': 'inline',
         'X-Content-Type-Options': 'nosniff',
+        'X-Frame-Options': 'ALLOWALL',
+        'Content-Security-Policy': "frame-ancestors *",
       },
     });
   } catch (error) {
