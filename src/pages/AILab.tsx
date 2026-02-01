@@ -16,6 +16,14 @@ interface ScoreBucket {
   color: string;
 }
 
+interface AgentVersionStats {
+  version: string;
+  count: number;
+  avgScore: number;
+  falsePositives: number;
+  falseNegatives: number;
+}
+
 const AILab = () => {
   const [jobs, setJobs] = useState<JobWithMatch[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -111,6 +119,44 @@ const AILab = () => {
       const status = job.pipeline_status;
       return score < 50 && (status === "interview" || status === "final_interview" || status === "offer");
     });
+  }, [scoredJobs]);
+
+  // Agent version statistics
+  const agentVersionStats = useMemo(() => {
+    const versionMap = new Map<string, { jobs: JobWithMatch[]; totalScore: number }>();
+    
+    scoredJobs.forEach((job) => {
+      const version = job.match?.agent_version || "1.0";
+      const existing = versionMap.get(version) || { jobs: [], totalScore: 0 };
+      existing.jobs.push(job);
+      existing.totalScore += job.match!.match_score;
+      versionMap.set(version, existing);
+    });
+
+    const stats: AgentVersionStats[] = [];
+    versionMap.forEach((data, version) => {
+      const fps = data.jobs.filter(j => {
+        const score = j.match!.match_score;
+        const status = j.pipeline_status;
+        return score >= 70 && (status === "not_fit" || status === "rejected");
+      }).length;
+      
+      const fns = data.jobs.filter(j => {
+        const score = j.match!.match_score;
+        const status = j.pipeline_status;
+        return score < 50 && (status === "interview" || status === "final_interview" || status === "offer");
+      }).length;
+
+      stats.push({
+        version,
+        count: data.jobs.length,
+        avgScore: Math.round(data.totalScore / data.jobs.length),
+        falsePositives: fps,
+        falseNegatives: fns,
+      });
+    });
+
+    return stats.sort((a, b) => b.count - a.count);
   }, [scoredJobs]);
 
   if (isLoading) {
@@ -308,6 +354,69 @@ const AILab = () => {
                     </TableCell>
                   </TableRow>
                 ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Agent Version Performance */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Agent Version Performance</CardTitle>
+          <CardDescription>
+            Scoring accuracy by agent version. Track improvements over time.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {agentVersionStats.length === 0 ? (
+            <p className="text-muted-foreground text-center py-4">No version data available</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Version</TableHead>
+                  <TableHead>Jobs Scored</TableHead>
+                  <TableHead>Avg. Score</TableHead>
+                  <TableHead>False Positives</TableHead>
+                  <TableHead>False Negatives</TableHead>
+                  <TableHead>Accuracy Rate</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {agentVersionStats.map((stat) => {
+                  const totalMispredictions = stat.falsePositives + stat.falseNegatives;
+                  const accuracyRate = stat.count > 0 
+                    ? Math.round(((stat.count - totalMispredictions) / stat.count) * 100) 
+                    : 0;
+                  
+                  return (
+                    <TableRow key={stat.version}>
+                      <TableCell>
+                        <Badge variant="outline">v{stat.version}</Badge>
+                      </TableCell>
+                      <TableCell className="font-medium">{stat.count}</TableCell>
+                      <TableCell>{stat.avgScore}%</TableCell>
+                      <TableCell>
+                        <span className={stat.falsePositives > 0 ? "text-destructive" : ""}>
+                          {stat.falsePositives}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <span className={stat.falseNegatives > 0 ? "text-yellow-600" : ""}>
+                          {stat.falseNegatives}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <Badge 
+                          variant={accuracyRate >= 90 ? "default" : accuracyRate >= 70 ? "secondary" : "outline"}
+                        >
+                          {accuracyRate}%
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           )}

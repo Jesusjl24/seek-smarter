@@ -24,6 +24,9 @@ interface Job {
   full_description?: string;
 }
 
+const AGENT_NAME = 'job_match_scorer';
+const AGENT_VERSION = '1.0';
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -46,7 +49,25 @@ serve(async (req) => {
 
     const jobDescription = job.full_description || job.description_snippet;
 
-    const prompt = `Compare this job with the candidate's profile and provide a detailed match analysis.
+    const systemPrompt = `You are a senior technical recruiter with 15+ years of experience evaluating job-candidate fit.
+Your role is to act as a DETERMINISTIC job-fit evaluator. You MUST:
+- Base ALL conclusions strictly on provided evidence
+- NEVER invent or assume experience not explicitly stated
+- Give partial credit only for implicit/transferable skills
+- Apply heavy penalties for missing must-have requirements
+- Materially reduce scores for seniority mismatches
+- When uncertain, ALWAYS downgrade the score
+
+You are NOT a resume writer or cover letter generator. You only evaluate fit.`;
+
+    const prompt = `Evaluate the job-candidate fit using this strict rubric:
+
+SCORING RUBRIC (weights are FIXED):
+- Hard Skills Alignment: 35% - Direct match of required technical skills
+- Experience & Seniority: 30% - Years of experience and role level match
+- Impact & Achievements: 20% - Demonstrated results aligned to role needs
+- Education & Certifications: 10% - Required qualifications match
+- Soft Skills & Culture: 5% - Communication, leadership, cultural indicators
 
 CANDIDATE PROFILE:
 - Technical Skills: ${profile.skills_technical.join(', ') || 'None specified'}
@@ -64,21 +85,39 @@ JOB DETAILS:
 - Location: ${job.location}
 - Description: ${jobDescription}
 
-Return a JSON object with these exact fields:
+RECOMMENDATION THRESHOLDS:
+- 80-100: APPLY (Strong match)
+- 60-79: CAUTIOUS_APPLY (Worth applying with tailoring)
+- 0-59: DO_NOT_APPLY (Significant gaps, likely rejection)
+
+Return a JSON object with these EXACT fields:
 {
-  "match_score": <0-100 integer>,
-  "skill_match_percentage": <0-100 integer>,
-  "recommendation": "<Strong Match|Good Match|Moderate Match|Weak Match>",
-  "reasoning": "2-3 sentences explaining the score",
-  "pros": ["pro1", "pro2", "pro3"],
-  "cons": ["con1", "con2"],
-  "gaps": ["missing skill/requirement 1", "missing skill/requirement 2"],
-  "strategic_advice": "1-2 sentences of advice for applying to this role"
+  "agent_meta": {
+    "agent": "${AGENT_NAME}",
+    "version": "${AGENT_VERSION}",
+    "alignment_check": "ALIGNED"
+  },
+  "scores": {
+    "hard_skills": <0-100>,
+    "experience_seniority": <0-100>,
+    "impact": <0-100>,
+    "credentials": <0-100>,
+    "soft_skills": <0-100>
+  },
+  "final_score": <0-100, weighted average>,
+  "skill_match_percentage": <0-100>,
+  "recommendation": "APPLY | CAUTIOUS_APPLY | DO_NOT_APPLY",
+  "veto_reasons": ["reason if any critical blocker exists"],
+  "evidence_gaps": ["missing evidence that prevented higher score"],
+  "pros": ["strength 1", "strength 2", "strength 3"],
+  "cons": ["weakness 1", "weakness 2"],
+  "reasoning": "2-3 concise sentences explaining the decision.",
+  "strategic_advice": "1-2 realistic sentences for applying, or explanation why to skip."
 }
 
-Be realistic and honest in your assessment. Return ONLY the JSON object.`;
+Be realistic and honest. If uncertain about experience claims, assume they are not present. Return ONLY the JSON object.`;
 
-    console.log(`Scoring job: ${job.title} at ${job.company}`);
+    console.log(`[${AGENT_NAME} v${AGENT_VERSION}] Scoring job: ${job.title} at ${job.company}`);
 
     const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
@@ -89,16 +128,10 @@ Be realistic and honest in your assessment. Return ONLY the JSON object.`;
       body: JSON.stringify({
         model: 'google/gemini-3-flash-preview',
         messages: [
-          {
-            role: 'system',
-            content: 'You are a job matching expert. Analyze job-candidate fit and provide honest, actionable assessments. Return valid JSON only.'
-          },
-          {
-            role: 'user',
-            content: prompt
-          }
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: prompt }
         ],
-        temperature: 0.4,
+        temperature: 0.3,
       }),
     });
 
@@ -127,33 +160,72 @@ Be realistic and honest in your assessment. Return ONLY the JSON object.`;
       throw new Error('No response from AI');
     }
 
-    // Parse the JSON response
+    // Parse the JSON response (handle markdown code fences)
     let matchResult;
     try {
-      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      const cleanedContent = content.replace(/```json\n?|\n?```/g, '').trim();
+      const jsonMatch = cleanedContent.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         matchResult = JSON.parse(jsonMatch[0]);
       } else {
-        matchResult = JSON.parse(content);
+        matchResult = JSON.parse(cleanedContent);
       }
     } catch (parseError) {
       console.error('Failed to parse AI response:', content);
       throw new Error('Failed to parse match data');
     }
 
-    // Validate and normalize
-    const match = {
-      match_score: Math.min(100, Math.max(0, parseInt(matchResult.match_score) || 50)),
-      skill_match_percentage: Math.min(100, Math.max(0, parseInt(matchResult.skill_match_percentage) || 50)),
-      recommendation: matchResult.recommendation || 'Moderate Match',
-      reasoning: matchResult.reasoning || '',
-      pros: Array.isArray(matchResult.pros) ? matchResult.pros : [],
-      cons: Array.isArray(matchResult.cons) ? matchResult.cons : [],
-      gaps: Array.isArray(matchResult.gaps) ? matchResult.gaps : [],
-      strategic_advice: matchResult.strategic_advice || '',
+    // Validate and normalize the response
+    const normalizeScore = (val: unknown) => Math.min(100, Math.max(0, parseInt(String(val)) || 0));
+    
+    const scores = {
+      hard_skills: normalizeScore(matchResult.scores?.hard_skills),
+      experience_seniority: normalizeScore(matchResult.scores?.experience_seniority),
+      impact: normalizeScore(matchResult.scores?.impact),
+      credentials: normalizeScore(matchResult.scores?.credentials),
+      soft_skills: normalizeScore(matchResult.scores?.soft_skills),
     };
 
-    console.log(`Match score: ${match.match_score}% - ${match.recommendation}`);
+    // Calculate weighted final score
+    const weightedScore = Math.round(
+      scores.hard_skills * 0.35 +
+      scores.experience_seniority * 0.30 +
+      scores.impact * 0.20 +
+      scores.credentials * 0.10 +
+      scores.soft_skills * 0.05
+    );
+
+    // Determine recommendation based on thresholds
+    let recommendation: string;
+    if (weightedScore >= 80) {
+      recommendation = 'APPLY';
+    } else if (weightedScore >= 60) {
+      recommendation = 'CAUTIOUS_APPLY';
+    } else {
+      recommendation = 'DO_NOT_APPLY';
+    }
+
+    const match = {
+      agent_meta: {
+        agent: AGENT_NAME,
+        version: AGENT_VERSION,
+        alignment_check: 'ALIGNED',
+      },
+      scores,
+      final_score: weightedScore,
+      match_score: weightedScore, // Legacy field for compatibility
+      skill_match_percentage: normalizeScore(matchResult.skill_match_percentage),
+      recommendation,
+      veto_reasons: Array.isArray(matchResult.veto_reasons) ? matchResult.veto_reasons : [],
+      evidence_gaps: Array.isArray(matchResult.evidence_gaps) ? matchResult.evidence_gaps : [],
+      pros: Array.isArray(matchResult.pros) ? matchResult.pros : [],
+      cons: Array.isArray(matchResult.cons) ? matchResult.cons : [],
+      reasoning: matchResult.reasoning || '',
+      strategic_advice: matchResult.strategic_advice || '',
+      gaps: Array.isArray(matchResult.evidence_gaps) ? matchResult.evidence_gaps : [], // Legacy field
+    };
+
+    console.log(`[${AGENT_NAME} v${AGENT_VERSION}] Score: ${match.final_score}% - ${match.recommendation}`);
 
     return new Response(
       JSON.stringify(match),

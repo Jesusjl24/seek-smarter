@@ -14,8 +14,48 @@ export type Database = {
   }
   public: {
     Tables: {
+      job_artifacts: {
+        Row: {
+          agent: string
+          artifact_type: string
+          content: Json
+          created_at: string | null
+          id: string
+          job_id: string
+          version: string
+        }
+        Insert: {
+          agent: string
+          artifact_type: string
+          content: Json
+          created_at?: string | null
+          id?: string
+          job_id: string
+          version: string
+        }
+        Update: {
+          agent?: string
+          artifact_type?: string
+          content?: Json
+          created_at?: string | null
+          id?: string
+          job_id?: string
+          version?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "job_artifacts_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "jobs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       job_matches: {
         Row: {
+          agent: string | null
+          agent_version: string | null
           cons: string[] | null
           gaps: string[] | null
           id: string
@@ -26,10 +66,14 @@ export type Database = {
           recommendation: string
           resume_profile_id: string
           scored_at: string
+          scores: Json | null
           skill_match_percentage: number | null
           strategic_advice: string | null
+          veto_reasons: string[] | null
         }
         Insert: {
+          agent?: string | null
+          agent_version?: string | null
           cons?: string[] | null
           gaps?: string[] | null
           id?: string
@@ -40,10 +84,14 @@ export type Database = {
           recommendation: string
           resume_profile_id: string
           scored_at?: string
+          scores?: Json | null
           skill_match_percentage?: number | null
           strategic_advice?: string | null
+          veto_reasons?: string[] | null
         }
         Update: {
+          agent?: string | null
+          agent_version?: string | null
           cons?: string[] | null
           gaps?: string[] | null
           id?: string
@@ -54,8 +102,10 @@ export type Database = {
           recommendation?: string
           resume_profile_id?: string
           scored_at?: string
+          scores?: Json | null
           skill_match_percentage?: number | null
           strategic_advice?: string | null
+          veto_reasons?: string[] | null
         }
         Relationships: [
           {

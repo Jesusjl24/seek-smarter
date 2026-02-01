@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { JobsTable } from "@/components/jobs/JobsTable";
+import { TailoredResumeModal } from "@/components/jobs/TailoredResumeModal";
+import { CoverLetterModal } from "@/components/jobs/CoverLetterModal";
 import {
   fetchJobsByStatus,
   deleteJob,
@@ -8,13 +10,25 @@ import {
   updateJobStatus,
   bulkUpdateJobStatus,
   updateJobNotes,
+  fetchJobArtifacts,
+  saveJobArtifact,
+  generateTailoredResume,
+  generateCoverLetter,
 } from "@/lib/api/jobs";
+import { fetchResumeProfile } from "@/lib/api/resume";
 import { useLayoutContext } from "@/components/layout/MainLayout";
-import type { JobWithMatch, PipelineStatus } from "@/types/job";
+import type { JobWithMatch, PipelineStatus, TailoredResume, CoverLetter, JobArtifact, ResumeProfile } from "@/types/job";
 
 const Shortlist = () => {
   const [jobs, setJobs] = useState<JobWithMatch[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [artifacts, setArtifacts] = useState<Map<string, JobArtifact[]>>(new Map());
+  const [profile, setProfile] = useState<ResumeProfile | null>(null);
+  
+  // Modal states
+  const [viewingResume, setViewingResume] = useState<TailoredResume | null>(null);
+  const [viewingCoverLetter, setViewingCoverLetter] = useState<CoverLetter | null>(null);
+  
   const { toast } = useToast();
   const { refreshCounts } = useLayoutContext();
 
@@ -22,15 +36,36 @@ const Shortlist = () => {
     async function loadData() {
       try {
         // Fetch shortlist plus applied/interview/offer stages
-        const jobsData = await fetchJobsByStatus([
-          "shortlist",
-          "applied",
-          "screening",
-          "interview",
-          "final_interview",
-          "offer",
+        const [jobsData, profileData] = await Promise.all([
+          fetchJobsByStatus([
+            "shortlist",
+            "applied",
+            "screening",
+            "interview",
+            "final_interview",
+            "offer",
+          ]),
+          fetchResumeProfile(),
         ]);
+        
         setJobs(jobsData);
+        setProfile(profileData);
+        
+        // Fetch artifacts for all jobs
+        const artifactsMap = new Map<string, JobArtifact[]>();
+        await Promise.all(
+          jobsData.map(async (job) => {
+            try {
+              const jobArtifacts = await fetchJobArtifacts(job.id);
+              if (jobArtifacts.length > 0) {
+                artifactsMap.set(job.id, jobArtifacts);
+              }
+            } catch {
+              // Ignore individual artifact fetch errors
+            }
+          })
+        );
+        setArtifacts(artifactsMap);
       } catch (error) {
         console.error("Error loading shortlist:", error);
         toast({
@@ -129,6 +164,114 @@ const Shortlist = () => {
     [toast, refreshCounts]
   );
 
+  const handleGenerateResume = useCallback(
+    async (job: JobWithMatch): Promise<TailoredResume> => {
+      if (!profile) {
+        throw new Error("Please upload your resume first");
+      }
+      if (!job.match || job.match.match_score < 60) {
+        throw new Error("Score must be 60 or higher");
+      }
+
+      try {
+        const result = await generateTailoredResume(job, profile, job.match.match_score);
+        
+        // Save artifact
+        await saveJobArtifact({
+          job_id: job.id,
+          artifact_type: 'tailored_resume',
+          content: result,
+          agent: result.agent_meta.agent,
+          version: result.agent_meta.version,
+        });
+
+        // Update local artifacts map
+        setArtifacts((prev) => {
+          const next = new Map(prev);
+          const existing = next.get(job.id) || [];
+          next.set(job.id, [
+            ...existing.filter(a => a.artifact_type !== 'tailored_resume'),
+            {
+              id: crypto.randomUUID(),
+              job_id: job.id,
+              artifact_type: 'tailored_resume',
+              content: result,
+              agent: result.agent_meta.agent,
+              version: result.agent_meta.version,
+              created_at: new Date().toISOString(),
+            },
+          ]);
+          return next;
+        });
+
+        toast({ title: "Resume tailored successfully" });
+        return result;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Failed to generate";
+        toast({ title: message, variant: "destructive" });
+        throw error;
+      }
+    },
+    [profile, toast]
+  );
+
+  const handleGenerateCoverLetter = useCallback(
+    async (job: JobWithMatch): Promise<CoverLetter> => {
+      if (!profile) {
+        throw new Error("Please upload your resume first");
+      }
+      if (!job.match || job.match.match_score < 60) {
+        throw new Error("Score must be 60 or higher");
+      }
+
+      try {
+        // Check if we have tailored resume highlights to use
+        const resumeArtifact = artifacts.get(job.id)?.find(a => a.artifact_type === 'tailored_resume');
+        const highlights = resumeArtifact 
+          ? (resumeArtifact.content as TailoredResume).skills_to_emphasize 
+          : undefined;
+
+        const result = await generateCoverLetter(job, profile, job.match.match_score, highlights);
+        
+        // Save artifact
+        await saveJobArtifact({
+          job_id: job.id,
+          artifact_type: 'cover_letter',
+          content: result,
+          agent: result.agent_meta.agent,
+          version: result.agent_meta.version,
+        });
+
+        // Update local artifacts map
+        setArtifacts((prev) => {
+          const next = new Map(prev);
+          const existing = next.get(job.id) || [];
+          next.set(job.id, [
+            ...existing.filter(a => a.artifact_type !== 'cover_letter'),
+            {
+              id: crypto.randomUUID(),
+              job_id: job.id,
+              artifact_type: 'cover_letter',
+              content: result,
+              agent: result.agent_meta.agent,
+              version: result.agent_meta.version,
+              created_at: new Date().toISOString(),
+            },
+          ]);
+          return next;
+        });
+
+        toast({ title: "Cover letter generated successfully" });
+        return result;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Failed to generate";
+        toast({ title: message, variant: "destructive" });
+        throw error;
+      }
+    },
+    [profile, artifacts, toast]
+  );
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -146,6 +289,11 @@ const Shortlist = () => {
         <h1 className="text-2xl font-bold mb-1">Shortlist</h1>
         <p className="text-muted-foreground">
           Jobs you're interested in. Track your application progress here.
+          {!profile && (
+            <span className="text-yellow-600 ml-2">
+              Upload your resume to enable AI tailoring.
+            </span>
+          )}
         </p>
       </div>
 
@@ -157,10 +305,28 @@ const Shortlist = () => {
         onDelete={handleDelete}
         onDeleteMultiple={handleDeleteMultiple}
         showStageColumn={true}
+        showAIColumn={!!profile}
         availableActions={{
           moveToInbox: true,
           moveToNotAFit: true,
         }}
+        artifacts={artifacts}
+        onGenerateResume={handleGenerateResume}
+        onGenerateCoverLetter={handleGenerateCoverLetter}
+        onViewResume={setViewingResume}
+        onViewCoverLetter={setViewingCoverLetter}
+      />
+
+      <TailoredResumeModal
+        resume={viewingResume}
+        open={!!viewingResume}
+        onClose={() => setViewingResume(null)}
+      />
+
+      <CoverLetterModal
+        coverLetter={viewingCoverLetter}
+        open={!!viewingCoverLetter}
+        onClose={() => setViewingCoverLetter(null)}
       />
     </div>
   );

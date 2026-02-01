@@ -11,6 +11,22 @@ export type PipelineStatus =
   | 'rejected' 
   | 'withdrawn';
 
+// Agent metadata
+export interface AgentMeta {
+  agent: string;
+  version: string;
+  alignment_check?: string;
+}
+
+// Rubric-based scores from scoring agent
+export interface RubricScores {
+  hard_skills: number;
+  experience_seniority: number;
+  impact: number;
+  credentials: number;
+  soft_skills: number;
+}
+
 export interface Job {
   id: string;
   seek_job_id: string;
@@ -57,6 +73,49 @@ export interface JobMatch {
   gaps: string[];
   strategic_advice: string | null;
   scored_at: string;
+  // Agent metadata fields
+  agent?: string;
+  agent_version?: string;
+  veto_reasons?: string[];
+  scores?: RubricScores;
+}
+
+// Tailored resume artifact from resume_tailor agent
+export interface TailoredResume {
+  agent_meta: AgentMeta;
+  target_role: { title: string; company: string };
+  keywords_to_inject: string[];
+  skills_to_emphasize: string[];
+  summary_rewrite: string;
+  bullet_rewrites: Array<{
+    section: string;
+    before: string;
+    after: string;
+    why: string;
+  }>;
+  gap_mitigation: Array<{ gap: string; workaround: string }>;
+  final_notes: string;
+}
+
+// Cover letter artifact from cover_letter_writer agent
+export interface CoverLetter {
+  agent_meta: AgentMeta;
+  target_role: { title: string; company: string };
+  cover_letter: string;
+  key_points_used: string[];
+  suggested_subject_lines: string[];
+  final_checklist: string[];
+}
+
+// Job artifact record stored in database
+export interface JobArtifact {
+  id: string;
+  job_id: string;
+  artifact_type: 'score' | 'tailored_resume' | 'cover_letter';
+  content: TailoredResume | CoverLetter | Record<string, unknown>;
+  agent: string;
+  version: string;
+  created_at: string;
 }
 
 export interface JobWithMatch extends Job {
