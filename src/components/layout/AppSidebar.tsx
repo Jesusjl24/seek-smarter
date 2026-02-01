@@ -1,4 +1,5 @@
 import { Inbox, Star, XCircle, FlaskConical } from "lucide-react";
+import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { NavLink } from "@/components/NavLink";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -34,11 +35,14 @@ export function AppSidebar({ profile, onProfileUpdate, counts }: AppSidebarProps
   return (
     <Sidebar>
       <SidebarHeader className="p-4">
-        <div>
-          <h1 className="text-lg font-bold">JS-Searcher</h1>
-          <p className="text-xs text-muted-foreground">
-            AI-powered SEEK job matcher
-          </p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-lg font-bold">JS-Searcher</h1>
+            <p className="text-xs text-muted-foreground">
+              AI-powered SEEK job matcher
+            </p>
+          </div>
+          <ThemeToggle />
         </div>
       </SidebarHeader>
 
