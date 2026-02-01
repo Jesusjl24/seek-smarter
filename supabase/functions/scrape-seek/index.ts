@@ -1,7 +1,36 @@
+/**
+ * SEEK Job Scraper Edge Function
+ * 
+ * Expected Request JSON:
+ * {
+ *   "keywords": "Project Manager",      // required
+ *   "location": "Sydney",               // optional
+ *   "filters": {                        // optional
+ *     "workType": "full-time",          // full-time, part-time, contract, casual
+ *     "workArrangement": "remote",      // on-site, hybrid, remote
+ *     "salaryMin": "100000",
+ *     "salaryMax": "150000",
+ *     "salaryType": "annual",           // annual, monthly, hourly
+ *     "datePosted": "7"                 // days: 1, 3, 7, 14, 30
+ *   },
+ *   "limit": 20                         // 1-50, default 20 (string or number)
+ * }
+ * 
+ * Required Environment Variable:
+ *   FIRECRAWL_API_KEY - Your Firecrawl API key
+ * 
+ * Test with curl:
+ *   curl -X POST https://<project>.supabase.co/functions/v1/scrape-seek \
+ *     -H "Content-Type: application/json" \
+ *     -H "Authorization: Bearer <anon-key>" \
+ *     -d '{"keywords":"Software Engineer","location":"Melbourne","limit":10}'
+ */
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
@@ -26,67 +55,110 @@ interface DiagnosticInfo {
   job_ids_found?: number;
   possible_blocking?: boolean;
   raw_sample?: string;
+  parsing_method?: string;
+}
+
+// Helper: create a JSON response with CORS headers
+function jsonResponse(body: object, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  });
+}
+
+// Helper: parse and clamp limit to [1, 50], default 20
+function parseLimit(input: unknown): number {
+  if (input === null || input === undefined) return 20;
+  
+  let num: number;
+  if (typeof input === 'number') {
+    num = input;
+  } else if (typeof input === 'string') {
+    num = parseInt(input, 10);
+  } else {
+    return 20;
+  }
+  
+  if (isNaN(num) || !isFinite(num)) return 20;
+  return Math.min(Math.max(Math.floor(num), 1), 50);
 }
 
 serve(async (req) => {
+  // Handle CORS preflight
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
+    return new Response(null, { status: 204, headers: corsHeaders });
   }
 
   try {
-    const { keywords, location, filters, limit = 20 } = await req.json();
+    const body = await req.json();
+    const { keywords, location, filters, limit: rawLimit } = body;
 
-    if (!keywords) {
-      return new Response(
-        JSON.stringify({ success: false, error: 'Keywords are required', diagnostics: { message: 'No keywords provided' } }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+    if (!keywords || typeof keywords !== 'string' || keywords.trim() === '') {
+      return jsonResponse({ 
+        success: false, 
+        error: 'Keywords are required',
+        jobs: []
+      }, 400);
     }
 
     const apiKey = Deno.env.get('FIRECRAWL_API_KEY');
     if (!apiKey) {
-      console.error('FIRECRAWL_API_KEY not configured');
-      return new Response(
-        JSON.stringify({ success: false, error: 'Firecrawl connector not configured', diagnostics: { message: 'API key missing' } }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      console.error('[scrape-seek] FIRECRAWL_API_KEY not configured');
+      return jsonResponse({ 
+        success: false, 
+        error: 'Firecrawl connector not configured',
+        jobs: []
+      }, 500);
     }
 
-    // Build SEEK URL using query-param format
+    const jobLimit = parseLimit(rawLimit);
+    console.log(`[scrape-seek] Parsed limit: ${rawLimit} -> ${jobLimit}`);
+
+    // Build SEEK URL with proper query params
     const queryParams = new URLSearchParams();
-    queryParams.set('keywords', keywords);
+    queryParams.set('keywords', keywords.trim());
     
-    if (location) {
-      queryParams.set('where', location);
+    if (location && typeof location === 'string' && location.trim()) {
+      queryParams.set('where', location.trim());
     }
     
+    // Work type (SEEK uses lowercase 'worktype')
     if (filters?.workType && filters.workType !== 'any' && filters.workType !== '') {
       queryParams.set('worktype', filters.workType);
     }
     
+    // Work arrangement
     if (filters?.workArrangement && filters.workArrangement !== 'any' && filters.workArrangement !== '') {
       queryParams.set('workarrangement', filters.workArrangement);
     }
     
-    const salaryMin = filters?.salaryMin && filters.salaryMin !== 'any' && filters.salaryMin !== '' ? filters.salaryMin : '';
-    const salaryMax = filters?.salaryMax && filters.salaryMax !== 'any' && filters.salaryMax !== '' ? filters.salaryMax : '';
+    // Salary range - only add if at least one value is provided
+    const salaryMin = filters?.salaryMin && filters.salaryMin !== 'any' && filters.salaryMin !== '' 
+      ? filters.salaryMin : '';
+    const salaryMax = filters?.salaryMax && filters.salaryMax !== 'any' && filters.salaryMax !== '' 
+      ? filters.salaryMax : '';
     
     if (salaryMin || salaryMax) {
-      queryParams.set('salaryrange', `${salaryMin}-${salaryMax}`);
-      queryParams.set('salarytype', filters?.salaryType || 'annual');
+      // Format: MIN-MAX, but avoid just "-"
+      const rangeStr = `${salaryMin}-${salaryMax}`;
+      if (rangeStr !== '-') {
+        queryParams.set('salaryrange', rangeStr);
+        queryParams.set('salarytype', filters?.salaryType || 'annual');
+      }
     }
     
+    // Date posted
     if (filters?.datePosted && filters.datePosted !== 'any' && filters.datePosted !== '') {
       queryParams.set('daterange', filters.datePosted);
     }
 
     const seekUrl = `https://www.seek.com.au/jobs?${queryParams.toString()}`;
-    console.log('=== SEEK SCRAPER START ===');
-    console.log('Scraping SEEK URL:', seekUrl);
-    console.log('Filters:', JSON.stringify(filters));
+    console.log('[scrape-seek] === SEEK SCRAPER START ===');
+    console.log('[scrape-seek] Scraping URL:', seekUrl);
+    console.log('[scrape-seek] Filters:', JSON.stringify(filters));
+    console.log('[scrape-seek] Job limit:', jobLimit);
 
-    // Use Firecrawl with minimal config to avoid timeouts
-    // SEEK is JS-heavy, so we use a fast scrape and parse markdown ourselves
+    // Call Firecrawl API
     const response = await fetch('https://api.firecrawl.dev/v1/scrape', {
       method: 'POST',
       headers: {
@@ -96,10 +168,8 @@ serve(async (req) => {
       body: JSON.stringify({
         url: seekUrl,
         formats: ['markdown', 'links'],
-        // Minimal wait - just enough for initial content
         waitFor: 3000,
         timeout: 30000,
-        // Australian location
         location: {
           country: 'AU',
           languages: ['en-AU']
@@ -110,58 +180,61 @@ serve(async (req) => {
 
     const scrapeData = await response.json();
     
-    // Comprehensive logging
-    console.log('=== FIRECRAWL RESPONSE ===');
-    console.log('Response status:', response.status);
-    console.log('Response success:', scrapeData.success);
+    // Defensive logging of response shape
+    console.log('[scrape-seek] === FIRECRAWL RESPONSE ===');
+    console.log('[scrape-seek] HTTP status:', response.status);
+    console.log('[scrape-seek] Response success:', scrapeData.success);
+    console.log('[scrape-seek] Top-level keys:', Object.keys(scrapeData));
+    if (scrapeData.data) {
+      console.log('[scrape-seek] scrapeData.data keys:', Object.keys(scrapeData.data));
+    }
     
-    const data = scrapeData.data || scrapeData;
-    const markdown = data?.markdown || '';
-    const links = data?.links || [];
-    
-    console.log('Markdown length:', markdown.length);
-    console.log('Links found:', links.length);
-    
-    if (markdown.length > 0) {
-      console.log('Markdown sample (first 500 chars):', markdown.substring(0, 500));
+    // Handle Firecrawl error response
+    if (!response.ok) {
+      const errorMsg = scrapeData.error || `Scraping failed with status ${response.status}`;
+      console.error('[scrape-seek] Firecrawl API error:', errorMsg);
+      return jsonResponse({ 
+        success: false, 
+        jobs: [],
+        error: errorMsg,
+        diagnostics: {
+          message: 'Firecrawl API returned an error',
+          firecrawl_status: response.status,
+          url_scraped: seekUrl,
+        }
+      }, response.status);
     }
 
-    // Check for blocking/CAPTCHA indicators in markdown
-    const blockingIndicators = ['Cloudflare', 'captcha', 'CAPTCHA', 'Access Denied', 'blocked', 'Please verify'];
+    // Extract data from various possible Firecrawl response shapes
+    const data = scrapeData.data || scrapeData;
+    const markdown = data?.markdown || scrapeData?.markdown || '';
+    const links = data?.links || scrapeData?.links || [];
+    
+    console.log('[scrape-seek] Markdown length:', markdown.length);
+    console.log('[scrape-seek] Links found:', links.length);
+    
+    if (markdown.length > 0) {
+      console.log('[scrape-seek] Markdown sample (first 500 chars):', markdown.substring(0, 500));
+    }
+
+    // Check for blocking/CAPTCHA indicators
+    const blockingIndicators = ['Cloudflare', 'captcha', 'CAPTCHA', 'Access Denied', 'blocked', 'Please verify', 'challenge-platform'];
     const possibleBlocking = blockingIndicators.some(indicator => 
-      markdown.includes(indicator)
+      markdown.toLowerCase().includes(indicator.toLowerCase())
     );
     
     if (possibleBlocking) {
-      console.warn('⚠️ Possible anti-bot blocking detected!');
+      console.warn('[scrape-seek] ⚠️ Possible anti-bot blocking detected!');
     }
 
-    if (!response.ok) {
-      console.error('Firecrawl API error:', scrapeData);
-      return new Response(
-        JSON.stringify({ 
-          success: false, 
-          jobs: [],
-          error: scrapeData.error || `Scraping failed with status ${response.status}`,
-          diagnostics: {
-            message: 'Firecrawl API returned an error',
-            firecrawl_status: response.status,
-            url_scraped: seekUrl,
-          }
-        }),
-        { status: response.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // Parse the scraped content
-    const jobLimit = Math.min(Math.max(parseInt(limit) || 20, 1), 50);
-    const jobs = parseSeekJobs(data, jobLimit);
+    // Parse jobs from content
+    const { jobs, parsingMethod } = parseSeekJobs(data, markdown, links, jobLimit);
     
-    console.log('=== PARSING RESULTS ===');
-    console.log(`Parsed ${jobs.length} jobs from SEEK (limit: ${jobLimit})`);
+    console.log('[scrape-seek] === PARSING RESULTS ===');
+    console.log(`[scrape-seek] Parsed ${jobs.length} jobs using: ${parsingMethod}`);
     
     if (jobs.length > 0) {
-      console.log('First job sample:', JSON.stringify(jobs[0], null, 2));
+      console.log('[scrape-seek] First job:', JSON.stringify(jobs[0], null, 2));
     }
 
     // Build diagnostics for troubleshooting
@@ -172,12 +245,12 @@ serve(async (req) => {
       markdown_length: markdown.length,
       job_ids_found: jobs.length,
       possible_blocking: possibleBlocking,
+      parsing_method: parsingMethod,
     };
 
     if (jobs.length === 0) {
       diagnostics.raw_sample = markdown.substring(0, 300);
       
-      // Provide specific diagnostic messages
       if (possibleBlocking) {
         diagnostics.message = 'Page may be blocked by anti-bot protection (Cloudflare/CAPTCHA detected)';
       } else if (markdown.length < 100) {
@@ -187,49 +260,46 @@ serve(async (req) => {
       }
     }
 
-    console.log('=== SEEK SCRAPER END ===');
+    console.log('[scrape-seek] === SEEK SCRAPER END ===');
 
-    return new Response(
-      JSON.stringify({ 
-        success: jobs.length > 0, 
-        jobs,
-        diagnostics: jobs.length === 0 ? diagnostics : undefined 
-      }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    return jsonResponse({ 
+      success: jobs.length > 0, 
+      jobs,
+      diagnostics: jobs.length === 0 ? diagnostics : undefined 
+    });
+
   } catch (error) {
-    console.error('Error scraping SEEK:', error);
+    console.error('[scrape-seek] Error:', error);
     const errorMessage = error instanceof Error ? error.message : 'Failed to scrape SEEK';
-    return new Response(
-      JSON.stringify({ 
-        success: false, 
-        jobs: [],
-        error: errorMessage,
-        diagnostics: {
-          message: `Exception occurred: ${errorMessage}`,
-        }
-      }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    return jsonResponse({ 
+      success: false, 
+      jobs: [],
+      error: errorMessage,
+      diagnostics: {
+        message: `Exception occurred: ${errorMessage}`,
+      }
+    }, 500);
   }
 });
 
-function parseSeekJobs(data: any, limit: number): ScrapedJob[] {
-  const jobs: ScrapedJob[] = [];
-  
-  console.log('=== PARSING ATTEMPT ===');
-  
-  const markdown = data?.markdown || '';
-  const links = data?.links || [];
+interface ParseResult {
+  jobs: ScrapedJob[];
+  parsingMethod: string;
+}
+
+function parseSeekJobs(data: any, markdown: string, links: string[], limit: number): ParseResult {
+  console.log('[scrape-seek] === PARSING ATTEMPT ===');
   
   // Collect all job IDs from links and markdown
   const foundIds = new Set<string>();
   
   // Extract job IDs from links array
   for (const link of links) {
-    const match = link.match(/\/job\/(\d+)/);
-    if (match) {
-      foundIds.add(match[1]);
+    if (typeof link === 'string') {
+      const match = link.match(/\/job\/(\d+)/);
+      if (match) {
+        foundIds.add(match[1]);
+      }
     }
   }
   
@@ -240,7 +310,7 @@ function parseSeekJobs(data: any, limit: number): ScrapedJob[] {
     foundIds.add(match[1]);
   }
   
-  console.log(`Found ${foundIds.size} unique job IDs in content`);
+  console.log(`[scrape-seek] Found ${foundIds.size} unique job IDs in content`);
 
   // Try to parse markdown for job information
   const lines = markdown.split('\n');
@@ -287,14 +357,18 @@ function parseSeekJobs(data: any, limit: number): ScrapedJob[] {
   }
   
   if (parsedFromMarkdown.length > 0) {
-    console.log(`Parsed ${parsedFromMarkdown.length} jobs from markdown`);
-    return parsedFromMarkdown.slice(0, limit);
+    console.log(`[scrape-seek] Parsed ${parsedFromMarkdown.length} jobs from markdown`);
+    return { 
+      jobs: parsedFromMarkdown.slice(0, limit),
+      parsingMethod: 'markdown_parsing'
+    };
   }
 
   // Last resort: create entries from found job IDs
   if (foundIds.size > 0) {
-    console.log(`Creating ${Math.min(foundIds.size, limit)} placeholder entries from job IDs`);
+    console.log(`[scrape-seek] Creating ${Math.min(foundIds.size, limit)} placeholder entries from job IDs`);
     
+    const jobs: ScrapedJob[] = [];
     for (const jobId of Array.from(foundIds).slice(0, limit)) {
       jobs.push({
         seek_job_id: jobId,
@@ -305,36 +379,19 @@ function parseSeekJobs(data: any, limit: number): ScrapedJob[] {
         job_url: `https://www.seek.com.au/job/${jobId}`,
       });
     }
+    
+    return { 
+      jobs,
+      parsingMethod: 'job_id_fallback'
+    };
   }
 
-  return jobs.slice(0, limit);
-}
-
-function extractJobId(input: string): string | null {
-  if (!input) return null;
-  
-  // If it's already just a number
-  if (/^\d{6,}$/.test(input)) return input;
-  
-  // Extract from URL or path
-  const urlMatch = input.match(/\/job\/(\d+)/);
-  if (urlMatch) return urlMatch[1];
-  
-  // Extract any 6+ digit number sequence (SEEK IDs are typically 8+ digits)
-  const numMatch = input.match(/(\d{6,})/);
-  if (numMatch) return numMatch[1];
-  
-  return null;
-}
-
-function cleanText(text: string | undefined | null): string | undefined {
-  if (!text) return undefined;
-  return text.toString().trim().replace(/\s+/g, ' ').substring(0, 500);
+  return { jobs: [], parsingMethod: 'none' };
 }
 
 function buildJob(partial: Partial<ScrapedJob>): ScrapedJob {
   return {
-    seek_job_id: partial.seek_job_id!,
+    seek_job_id: String(partial.seek_job_id || ''),
     title: partial.title || 'Untitled Position',
     company: partial.company || 'Unknown Company',
     location: partial.location || 'Australia',
@@ -368,10 +425,8 @@ function extractJobDetails(line: string, job: Partial<ScrapedJob>, foundIds: Set
   
   // Look for company name (usually follows title, short and capitalized)
   if (!job.company && cleanLine.length > 2 && cleanLine.length < 80) {
-    // Skip lines that look like metadata or navigation
     const skipPatterns = ['ago', 'Apply', 'Save', 'Quick apply', 'jobs found', 'Search', 'Filter', 'Sort', 'Posted'];
     if (!skipPatterns.some(p => cleanLine.includes(p)) && !cleanLine.startsWith('[') && !cleanLine.startsWith('#')) {
-      // Check if it looks like a company name (starts with capital, no special chars at start)
       if (/^[A-Z]/.test(cleanLine) && !/^\d/.test(cleanLine)) {
         job.company = cleanLine;
         return;
@@ -421,7 +476,6 @@ function extractJobDetails(line: string, job: Partial<ScrapedJob>, foundIds: Set
   
   // Build description from content (longer lines that look like descriptions)
   if (!job.description_snippet && cleanLine.length > 60 && cleanLine.length < 400) {
-    // Avoid navigation/UI text
     if (!cleanLine.includes('©') && !cleanLine.includes('Privacy') && !cleanLine.includes('Terms')) {
       job.description_snippet = cleanLine;
     }
