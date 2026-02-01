@@ -26,6 +26,14 @@ export function ResumeViewModal({ profile, open, onClose }: ResumeViewModalProps
 
   const isPDF = profile.file_type === "application/pdf";
   const hasFile = !!profile.file_url;
+  
+  // Create proxied URL for PDF preview to bypass CORS
+  const getProxiedUrl = (url: string) => {
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    return `${supabaseUrl}/functions/v1/proxy-storage?url=${encodeURIComponent(url)}`;
+  };
+  
+  const previewUrl = hasFile && isPDF ? getProxiedUrl(profile.file_url!) : profile.file_url;
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
@@ -52,7 +60,7 @@ export function ResumeViewModal({ profile, open, onClose }: ResumeViewModalProps
                 {isPDF ? (
                   <div className="flex-1 border rounded-lg overflow-hidden bg-muted">
                     <iframe
-                      src={`${profile.file_url}#toolbar=0&navpanes=0`}
+                      src={`${previewUrl}#toolbar=0&navpanes=0`}
                       className="w-full h-[60vh]"
                       title="Resume PDF Preview"
                     />
