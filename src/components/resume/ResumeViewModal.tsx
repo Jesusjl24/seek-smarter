@@ -1,4 +1,3 @@
-import { useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -16,6 +15,7 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { Briefcase, GraduationCap, Award, Building2, Clock, FileText, Download } from "lucide-react";
+import { PDFViewer } from "./PDFViewer";
 import type { ResumeProfile } from "@/types/job";
 
 interface ResumeViewModalProps {
@@ -29,14 +29,6 @@ export function ResumeViewModal({ profile, open, onClose }: ResumeViewModalProps
 
   const isPDF = profile.file_type === "application/pdf";
   const hasFile = !!profile.file_url;
-  
-  // Create proxied URL for PDF preview to bypass CORS
-  const getProxiedUrl = (url: string) => {
-    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-    return `${supabaseUrl}/functions/v1/proxy-storage?url=${encodeURIComponent(url)}`;
-  };
-  
-  const previewUrl = hasFile && isPDF ? getProxiedUrl(profile.file_url!) : null;
 
   const getFileTypeLabel = () => {
     if (profile.file_type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") {
@@ -75,21 +67,15 @@ export function ResumeViewModal({ profile, open, onClose }: ResumeViewModalProps
           {/* Document Preview Section */}
           {hasFile && (
             <div className="shrink-0">
-              {isPDF && previewUrl ? (
-                <div className="border rounded-lg overflow-hidden bg-muted">
-                  <iframe
-                    src={`${previewUrl}#toolbar=0&navpanes=0&scrollbar=1`}
-                    className="w-full h-[50vh] border-0"
-                    title="Resume PDF Preview"
-                  />
-                </div>
+              {isPDF ? (
+                <PDFViewer fileUrl={profile.file_url!} fileName={profile.file_name || undefined} />
               ) : (
                 <div className="flex flex-col items-center justify-center gap-4 py-8 border rounded-lg bg-muted/50">
                   <FileText className="h-12 w-12 text-muted-foreground" />
                   <div className="text-center">
                     <p className="font-medium">{getFileTypeLabel()}</p>
                     <p className="text-sm text-muted-foreground mt-1">
-                      This file type cannot be previewed inline
+                      Preview not available for this file type
                     </p>
                   </div>
                   <Button asChild>
@@ -98,6 +84,15 @@ export function ResumeViewModal({ profile, open, onClose }: ResumeViewModalProps
                       Download {getFileTypeLabel()}
                     </a>
                   </Button>
+                  {/* Show raw text if available for non-PDF files */}
+                  {profile.raw_text && (
+                    <ScrollArea className="w-full max-h-40 mt-4 border rounded bg-background">
+                      <pre className="p-4 text-xs whitespace-pre-wrap font-mono">
+                        {profile.raw_text.slice(0, 2000)}
+                        {profile.raw_text.length > 2000 && "..."}
+                      </pre>
+                    </ScrollArea>
+                  )}
                 </div>
               )}
             </div>
