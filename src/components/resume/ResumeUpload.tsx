@@ -1,21 +1,33 @@
 import { useState, useRef } from "react";
-import { Upload, FileText, RefreshCw, Check, Eye } from "lucide-react";
+import { Upload, FileText, RefreshCw, Check, Eye, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { saveResumeProfile, uploadResumeFile } from "@/lib/api/resume";
+import { saveResumeProfile, uploadResumeFile, deleteResumeProfile } from "@/lib/api/resume";
 import { ResumeViewModal } from "./ResumeViewModal";
 import type { ResumeProfile } from "@/types/job";
 import { formatDistanceToNow } from "date-fns";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 interface ResumeUploadProps {
   profile: ResumeProfile | null;
-  onProfileUpdate: (profile: ResumeProfile) => void;
+  onProfileUpdate: (profile: ResumeProfile | null) => void;
 }
 
 export function ResumeUpload({ profile, onProfileUpdate }: ResumeUploadProps) {
+  const [isDeleting, setIsDeleting] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -108,13 +120,67 @@ export function ResumeUpload({ profile, onProfileUpdate }: ResumeUploadProps) {
     }
   };
 
+  const handleRemoveResume = async () => {
+    if (!profile) return;
+    
+    setIsDeleting(true);
+    try {
+      await deleteResumeProfile(profile.id);
+      onProfileUpdate(null);
+      toast({
+        title: "Resume removed",
+        description: "Your resume has been deleted.",
+      });
+    } catch (error) {
+      console.error("Error removing resume:", error);
+      toast({
+        title: "Remove failed",
+        description: "Failed to remove resume. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   return (
     <>
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-sm flex items-center gap-2">
-            <FileText className="h-4 w-4" />
-            Resume
+          <CardTitle className="text-sm flex items-center justify-between">
+            <span className="flex items-center gap-2">
+              <FileText className="h-4 w-4" />
+              Resume
+            </span>
+            {profile && (
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                    disabled={isDeleting}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Remove Resume?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This will delete your uploaded resume and all parsed data.
+                      You can upload a new resume at any time.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleRemoveResume}>
+                      Remove
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            )}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -164,12 +230,12 @@ export function ResumeUpload({ profile, onProfileUpdate }: ResumeUploadProps) {
             className="hidden"
           />
 
-          <div className="flex gap-2">
+          <div className="flex flex-col gap-2">
             {profile && (
               <Button
                 variant="outline"
                 size="sm"
-                className="flex-1"
+                className="w-full"
                 onClick={() => setShowViewModal(true)}
               >
                 <Eye className="h-4 w-4 mr-2" />
@@ -179,7 +245,7 @@ export function ResumeUpload({ profile, onProfileUpdate }: ResumeUploadProps) {
             <Button
               variant={profile ? "outline" : "default"}
               size="sm"
-              className="flex-1"
+              className="w-full"
               onClick={() => fileInputRef.current?.click()}
               disabled={isUploading}
             >
@@ -191,7 +257,7 @@ export function ResumeUpload({ profile, onProfileUpdate }: ResumeUploadProps) {
               ) : (
                 <>
                   <Upload className="h-4 w-4 mr-2" />
-                  {profile ? "Upload New" : "Upload Resume"}
+                  {profile ? "Upload New" : "Upload"}
                 </>
               )}
             </Button>
