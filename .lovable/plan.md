@@ -1,286 +1,378 @@
 
-
-# Implementation Plan: Inbox-Sort-Track Pipeline Workflow
+# Implementation Plan: AI-Driven Job Fit, Resume Tailoring & Cover Letter Agent System
 
 ## Overview
 
-This plan transforms the current job scraping dashboard into a full pipeline management system with four main sections: **Inbox**, **Shortlist**, **Not a Fit**, and **AI Lab**. Jobs will flow through a pipeline from discovery to outcome tracking.
+This plan extends the existing job scoring infrastructure into a complete 3-agent AI workflow:
+
+1. **Job Match Scoring Agent** (upgraded) - Rubric-based deterministic evaluation
+2. **Resume Tailoring Agent** (new) - Generate actionable resume suggestions for jobs scoring ≥60
+3. **Cover Letter Agent** (new) - Generate professional cover letters for jobs scoring ≥60
+
+All generated artifacts will be stored in a new `job_artifacts` table for auditability and analytics.
 
 ---
 
-## 1. Database Schema Changes
+## 1. Database Changes
 
-### Add columns to the existing `jobs` table:
+### New Table: `job_artifacts`
+
+Stores all AI-generated content (scores, tailored resumes, cover letters) with full agent metadata for auditing and AI Lab analytics.
 
 ```sql
--- Add pipeline tracking columns
-ALTER TABLE public.jobs
-  ADD COLUMN IF NOT EXISTS pipeline_status TEXT NOT NULL DEFAULT 'inbox',
-  ADD COLUMN IF NOT EXISTS notes TEXT NULL,
-  ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT now();
+CREATE TABLE public.job_artifacts (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  job_id UUID NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+  artifact_type TEXT NOT NULL, -- 'score' | 'tailored_resume' | 'cover_letter'
+  content JSONB NOT NULL,
+  agent TEXT NOT NULL,
+  version TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
 
--- Add constraint for valid pipeline statuses
-ALTER TABLE public.jobs
-  ADD CONSTRAINT jobs_pipeline_status_check 
-  CHECK (pipeline_status IN ('inbox', 'shortlist', 'not_fit', 'applied', 'screening', 'interview', 'final_interview', 'offer', 'rejected', 'withdrawn'));
+CREATE INDEX idx_job_artifacts_job_id ON public.job_artifacts(job_id);
+CREATE INDEX idx_job_artifacts_type ON public.job_artifacts(artifact_type);
+```
 
--- Create index for faster filtering by status
-CREATE INDEX IF NOT EXISTS idx_jobs_pipeline_status ON public.jobs(pipeline_status);
+### Update `job_matches` table
 
--- Create trigger to auto-update updated_at
-CREATE OR REPLACE FUNCTION update_jobs_updated_at()
-RETURNS TRIGGER AS $$
-BEGIN
-  NEW.updated_at = now();
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
+Add agent metadata columns to track scoring agent version:
 
-CREATE TRIGGER jobs_updated_at_trigger
-  BEFORE UPDATE ON public.jobs
-  FOR EACH ROW
-  EXECUTE FUNCTION update_jobs_updated_at();
+```sql
+ALTER TABLE public.job_matches
+  ADD COLUMN IF NOT EXISTS agent TEXT DEFAULT 'job_match_scorer',
+  ADD COLUMN IF NOT EXISTS agent_version TEXT DEFAULT '1.0',
+  ADD COLUMN IF NOT EXISTS veto_reasons TEXT[] DEFAULT '{}',
+  ADD COLUMN IF NOT EXISTS scores JSONB;
 ```
 
 ---
 
-## 2. TypeScript Types Updates
+## 2. Edge Functions
 
-### File: `src/types/job.ts`
+### A. Upgrade `score-job` (Agent 1 - Job Match Scorer)
 
-Add pipeline status types and extend the Job interface:
+**Location:** `supabase/functions/score-job/index.ts`
 
-```typescript
-// Pipeline status values
-export type PipelineStatus = 
-  | 'inbox' 
-  | 'shortlist' 
-  | 'not_fit' 
-  | 'applied' 
-  | 'screening' 
-  | 'interview' 
-  | 'final_interview' 
-  | 'offer' 
-  | 'rejected' 
-  | 'withdrawn';
+**Changes:**
+- Implement strict 5-category rubric scoring:
+  - Hard Skills Alignment (35%)
+  - Experience & Seniority (30%)
+  - Impact & Achievements (20%)
+  - Education & Certifications (10%)
+  - Soft Skills & Culture (5%)
+- Return structured output with `agent_meta`, `scores`, `veto_reasons`, `evidence_gaps`
+- New recommendation values: `APPLY` | `CAUTIOUS_APPLY` | `DO_NOT_APPLY`
+- Thresholds: 80-100 → APPLY, 60-79 → CAUTIOUS_APPLY, 0-59 → DO_NOT_APPLY
+- Add system prompt enforcing deterministic recruiter persona
 
-// Extend Job interface
-export interface Job {
-  // ...existing fields
-  pipeline_status: PipelineStatus;
-  notes: string | null;
-  updated_at: string;
+**Output Schema:**
+```json
+{
+  "agent_meta": { "agent": "job_match_scorer", "version": "1.0", "alignment_check": "ALIGNED" },
+  "scores": {
+    "hard_skills": 0,
+    "experience_seniority": 0,
+    "impact": 0,
+    "credentials": 0,
+    "soft_skills": 0
+  },
+  "final_score": 0,
+  "skill_match_percentage": 0,
+  "recommendation": "APPLY | CAUTIOUS_APPLY | DO_NOT_APPLY",
+  "veto_reasons": [],
+  "evidence_gaps": [],
+  "pros": [],
+  "cons": [],
+  "reasoning": "2-3 sentences",
+  "strategic_advice": "1-2 sentences"
+}
+```
+
+### B. Create `tailor-resume` (Agent 2 - Resume Tailor)
+
+**Location:** `supabase/functions/tailor-resume/index.ts`
+
+**Preconditions:**
+- Requires `final_score >= 60` (return 409 Conflict otherwise)
+
+**Purpose:**
+- Generate truthful, copy-paste-ready resume tailoring suggestions
+- Rephrase and reorder existing experience (no fabrication)
+- Identify keywords to inject and skills to emphasize
+
+**Output Schema:**
+```json
+{
+  "agent_meta": { "agent": "resume_tailor", "version": "1.0" },
+  "target_role": { "title": "", "company": "" },
+  "keywords_to_inject": [],
+  "skills_to_emphasize": [],
+  "summary_rewrite": "2-3 line tailored summary",
+  "bullet_rewrites": [
+    {
+      "section": "Experience",
+      "before": "Original phrasing",
+      "after": "Rewritten bullet aligned to JD",
+      "why": "Improvement explanation"
+    }
+  ],
+  "gap_mitigation": [
+    { "gap": "Missing requirement", "workaround": "Truthful positioning strategy" }
+  ],
+  "final_notes": "How to tailor without misrepresentation"
+}
+```
+
+### C. Create `generate-cover-letter` (Agent 3 - Cover Letter Writer)
+
+**Location:** `supabase/functions/generate-cover-letter/index.ts`
+
+**Preconditions:**
+- Requires `final_score >= 60` (return 409 Conflict otherwise)
+
+**Purpose:**
+- Generate professional Australian-style cover letter
+- Concise, role-specific, no fluff or fabrication
+- Uses tailored resume highlights
+
+**Output Schema:**
+```json
+{
+  "agent_meta": { "agent": "cover_letter_writer", "version": "1.0" },
+  "target_role": { "title": "", "company": "" },
+  "cover_letter": "Full letter text with paragraphs",
+  "key_points_used": [],
+  "suggested_subject_lines": [],
+  "final_checklist": [
+    "Tailored to role",
+    "Matches JD language",
+    "No fabricated claims"
+  ]
 }
 ```
 
 ---
 
-## 3. New Files to Create
+## 3. TypeScript Types
 
-### A. Navigation Sidebar Component
-**File:** `src/components/layout/AppSidebar.tsx`
+### File: `src/types/job.ts`
 
-A navigation sidebar with links to:
-- Inbox (with count badge)
-- Shortlist (with count badge)  
-- Not a Fit (with count badge)
-- AI Lab
+Add new types for agent outputs and artifacts:
 
-Uses the existing shadcn Sidebar components with NavLink for active route highlighting.
-
-### B. Main Layout Wrapper
-**File:** `src/components/layout/MainLayout.tsx`
-
-Wraps the app with SidebarProvider, containing:
-- Left navigation sidebar (always visible)
-- Main content area with SidebarInset
-- Mobile-responsive hamburger menu
-
-### C. Shortlist Page
-**File:** `src/pages/Shortlist.tsx`
-
-A spreadsheet-style table showing jobs with `pipeline_status = 'shortlist'`:
-- Sortable columns (title, company, score, posted date)
-- Search/filter by title or company
-- Inline notes editing (or modal)
-- Pipeline stage dropdown selector
-- Bulk selection and actions
-- Actions: Move to Not a Fit, Update stage, Delete
-
-### D. Not a Fit Page  
-**File:** `src/pages/NotAFit.tsx`
-
-Similar table view for rejected/not_fit jobs:
-- Quick action to restore to Inbox
-- Quick action to move to Shortlist
-- Delete option
-
-### E. AI Lab Page
-**File:** `src/pages/AILab.tsx`
-
-Analytics dashboard with:
-- Score distribution buckets (0-49, 50-69, 70-84, 85-100)
-- False positives table (scored >= 70 but ended in not_fit/rejected)
-- False negatives table (scored < 50 but ended in interview/offer)
-- Date range filter (7/30/90 days)
-- Keyword/location filter
-
-### F. Jobs Table Component
-**File:** `src/components/jobs/JobsTable.tsx`
-
-Reusable spreadsheet-style table component with:
-- Checkbox column for selection
-- Customizable columns
-- Sorting functionality
-- Inline editing for notes
-- Pipeline stage dropdown
-- Row actions menu
-
----
-
-## 4. Files to Modify
-
-### A. `src/App.tsx`
-Add new routes:
 ```typescript
-<Route path="/" element={<MainLayout />}>
-  <Route index element={<Inbox />} />
-  <Route path="shortlist" element={<Shortlist />} />
-  <Route path="not-a-fit" element={<NotAFit />} />
-  <Route path="ai-lab" element={<AILab />} />
-</Route>
+// Agent metadata
+export interface AgentMeta {
+  agent: string;
+  version: string;
+  alignment_check?: string;
+}
+
+// Rubric-based scores
+export interface RubricScores {
+  hard_skills: number;
+  experience_seniority: number;
+  impact: number;
+  credentials: number;
+  soft_skills: number;
+}
+
+// Extended JobMatch with agent metadata
+export interface JobMatch {
+  // ...existing fields
+  agent?: string;
+  agent_version?: string;
+  veto_reasons?: string[];
+  scores?: RubricScores;
+}
+
+// Tailored resume artifact
+export interface TailoredResume {
+  agent_meta: AgentMeta;
+  target_role: { title: string; company: string };
+  keywords_to_inject: string[];
+  skills_to_emphasize: string[];
+  summary_rewrite: string;
+  bullet_rewrites: Array<{
+    section: string;
+    before: string;
+    after: string;
+    why: string;
+  }>;
+  gap_mitigation: Array<{ gap: string; workaround: string }>;
+  final_notes: string;
+}
+
+// Cover letter artifact
+export interface CoverLetter {
+  agent_meta: AgentMeta;
+  target_role: { title: string; company: string };
+  cover_letter: string;
+  key_points_used: string[];
+  suggested_subject_lines: string[];
+  final_checklist: string[];
+}
+
+// Job artifact record
+export interface JobArtifact {
+  id: string;
+  job_id: string;
+  artifact_type: 'score' | 'tailored_resume' | 'cover_letter';
+  content: TailoredResume | CoverLetter | Record<string, unknown>;
+  agent: string;
+  version: string;
+  created_at: string;
+}
 ```
 
-### B. `src/pages/Index.tsx` (becomes Inbox)
-Rename/refactor to `src/pages/Inbox.tsx`:
-- Filter to show only `pipeline_status = 'inbox'` jobs
-- Add "Shortlist" and "Not a fit" quick action buttons to each job card
-- Update stats cards to show pipeline counts
-- After scoring: auto-move jobs with score < 50 to `not_fit` (only if still in inbox)
+---
 
-### C. `src/components/jobs/JobCard.tsx`
-Add new action buttons:
-- "Shortlist" button (star icon)
-- "Not a fit" button (x icon)
-- Keep existing Score and Delete buttons
-- Add callback props: `onShortlist`, `onNotAFit`
+## 4. API Layer Updates
 
-### D. `src/components/jobs/JobList.tsx`
-- Add bulk actions: "Move to Shortlist", "Move to Not a Fit"
-- Pass new callbacks to JobCard
-- Update header with new bulk action buttons
+### File: `src/lib/api/jobs.ts`
 
-### E. `src/lib/api/jobs.ts`
-Add new API functions:
+Add new functions:
+
 ```typescript
-// Update single job status
-export async function updateJobStatus(
-  jobId: string, 
-  status: PipelineStatus
-): Promise<void>
+// Fetch artifacts for a job
+export async function fetchJobArtifacts(jobId: string): Promise<JobArtifact[]>
 
-// Bulk update job statuses
-export async function bulkUpdateJobStatus(
-  jobIds: string[], 
-  status: PipelineStatus
-): Promise<void>
+// Save a job artifact
+export async function saveJobArtifact(artifact: Omit<JobArtifact, 'id' | 'created_at'>): Promise<JobArtifact>
 
-// Update job notes
-export async function updateJobNotes(
-  jobId: string, 
-  notes: string
-): Promise<void>
+// Generate tailored resume (calls edge function)
+export async function generateTailoredResume(jobId: string, job: Job, profile: ResumeProfile): Promise<TailoredResume>
 
-// Fetch jobs by status
-export async function fetchJobsByStatus(
-  status: PipelineStatus | PipelineStatus[]
-): Promise<JobWithMatch[]>
+// Generate cover letter (calls edge function)
+export async function generateCoverLetter(jobId: string, job: Job, profile: ResumeProfile): Promise<CoverLetter>
 ```
-
-### F. `src/components/sidebar/JobStats.tsx`
-Update to show pipeline stats:
-- Inbox count
-- Shortlist count
-- Not a Fit count
-- Interview+ count (interview, final_interview, offer)
 
 ---
 
-## 5. Auto-Routing Logic
+## 5. UI Components
 
-### When a job is scored:
-After saving the match score in `handleScoreJob` (in Inbox page):
-1. Check if `match_score < 50`
-2. Check if job's current `pipeline_status === 'inbox'`
-3. If both true, automatically update `pipeline_status` to `'not_fit'`
-4. Show toast notification: "Job auto-moved to Not a Fit (low match score)"
+### A. New: `ArtifactGeneratorButtons.tsx`
 
-This logic runs only once when scoring completes and respects any manual user overrides.
+**Location:** `src/components/jobs/ArtifactGeneratorButtons.tsx`
+
+A component that shows "Generate Resume" and "Generate Cover Letter" buttons:
+- Only enabled when `match_score >= 60`
+- Shows loading state during generation
+- Disabled with tooltip explaining why if score is too low
+
+### B. New: `TailoredResumeModal.tsx`
+
+**Location:** `src/components/jobs/TailoredResumeModal.tsx`
+
+Modal displaying the tailored resume with:
+- Keywords to inject (as badges)
+- Skills to emphasize
+- Summary rewrite with copy button
+- Bullet rewrites in a before/after format
+- Gap mitigation strategies
+- Copy all to clipboard button
+
+### C. New: `CoverLetterModal.tsx`
+
+**Location:** `src/components/jobs/CoverLetterModal.tsx`
+
+Modal displaying the cover letter with:
+- Full formatted letter text
+- Key points used (as badges)
+- Subject line suggestions
+- Checklist items with checkmarks
+- Copy to clipboard button
+- Download as .txt option
 
 ---
 
-## 6. Component Details
+## 6. Page Updates
 
-### Navigation Sidebar Structure
-```text
-+------------------------+
-|  JS-Searcher           |
-|  AI Job Matcher        |
-+------------------------+
-|  Inbox           (12)  |
-|  Shortlist        (5)  |
-|  Not a Fit       (24)  |
-|  AI Lab                |
-+------------------------+
-|  Resume Upload         |
-|  [Resume status]       |
-+------------------------+
-```
+### A. Shortlist Page (`src/pages/Shortlist.tsx`)
 
-### Shortlist/Not a Fit Table Columns
-| Title | Company | Location | Posted | Score | Work Type | Arrangement | Salary | Notes | Stage | Actions |
-|-------|---------|----------|--------|-------|-----------|-------------|--------|-------|-------|---------|
+Add artifact generation capabilities:
 
-### Pipeline Stage Dropdown Options
-- Applied
-- Screening
-- Interview
-- Final Interview
-- Offer
-- Rejected
-- Withdrawn
+1. Add state for artifact modals and loading
+2. Pass generation handlers to JobsTable
+3. Show modals for viewing generated content
+4. Add "Generate Resume" and "Generate Cover Letter" buttons to each row (enabled when score ≥ 60)
+
+### B. JobsTable Component (`src/components/jobs/JobsTable.tsx`)
+
+Add new columns/actions:
+
+1. Add optional `onGenerateResume` and `onGenerateCoverLetter` callbacks
+2. Add "AI" column or integrate into Actions dropdown
+3. Show artifact status indicators (checkmarks for generated content)
+
+### C. AI Lab Page (`src/pages/AILab.tsx`)
+
+Enhance with agent version tracking:
+
+1. Add "Agent Version Performance" card showing v1.0 stats
+2. Track which agent version scored each job
+3. Compare false positive/negative rates by version (for future improvements)
 
 ---
 
 ## 7. Implementation Order
 
-1. **Database migration** - Add columns to jobs table
-2. **Types update** - Add PipelineStatus type and extend Job interface
-3. **API functions** - Add status update and bulk operations
-4. **MainLayout + AppSidebar** - Create new layout structure
-5. **Update App.tsx** - Add routing with new layout
-6. **Refactor Index to Inbox** - Filter by inbox status, add quick actions
-7. **Update JobCard** - Add Shortlist/Not a Fit buttons
-8. **JobsTable component** - Create reusable table
-9. **Shortlist page** - Implement spreadsheet view
-10. **NotAFit page** - Implement spreadsheet view
-11. **AI Lab page** - Implement analytics
-12. **Auto-routing logic** - Add score-based routing after scoring
+### Phase 1: Database & Types
+1. Create migration for `job_artifacts` table
+2. Add agent columns to `job_matches` table
+3. Update TypeScript types
+
+### Phase 2: Edge Functions
+4. Upgrade `score-job` with rubric-based scoring
+5. Create `tailor-resume` edge function
+6. Create `generate-cover-letter` edge function
+7. Update `supabase/config.toml` with new functions
+
+### Phase 3: API Layer
+8. Add artifact fetch/save functions
+9. Add generation wrapper functions
+
+### Phase 4: UI Components
+10. Create `ArtifactGeneratorButtons` component
+11. Create `TailoredResumeModal` component
+12. Create `CoverLetterModal` component
+
+### Phase 5: Page Integration
+13. Update Shortlist page with generation features
+14. Update JobsTable with generation buttons
+15. Enhance AI Lab with agent version tracking
 
 ---
 
-## Technical Notes
+## 8. File Summary
 
-### Existing Patterns to Follow
-- Use existing shadcn components (Table, Badge, Select, Dialog)
-- Follow existing API pattern in `src/lib/api/jobs.ts`
-- Use react-query patterns already in the project
-- Use existing NavLink component for active route highlighting
-- Use existing toast notifications for feedback
+### New Files
+- `supabase/functions/tailor-resume/index.ts`
+- `supabase/functions/generate-cover-letter/index.ts`
+- `src/components/jobs/ArtifactGeneratorButtons.tsx`
+- `src/components/jobs/TailoredResumeModal.tsx`
+- `src/components/jobs/CoverLetterModal.tsx`
 
-### Placeholder Prevention
-The scraper already includes `isValidJob()` validation that rejects jobs with placeholder titles. The `upsertJobs` function in the API layer will also be updated to double-check before insertion.
+### Modified Files
+- `supabase/functions/score-job/index.ts` (upgrade to rubric-based)
+- `supabase/config.toml` (add new functions)
+- `src/types/job.ts` (add new types)
+- `src/lib/api/jobs.ts` (add artifact functions)
+- `src/pages/Shortlist.tsx` (add generation UI)
+- `src/components/jobs/JobsTable.tsx` (add AI column)
+- `src/pages/AILab.tsx` (add agent version tracking)
 
-### Date Display
-The existing `formatDistanceToNow` from date-fns handles relative date display. For invalid dates, we'll fall back to the raw string or show nothing.
+### Database Migrations
+- Create `job_artifacts` table
+- Add `agent`, `agent_version`, `veto_reasons`, `scores` columns to `job_matches`
 
+---
+
+## 9. Key Technical Decisions
+
+1. **Score threshold of 60**: Prevents wasting AI credits on poor matches
+2. **409 Conflict response**: Clear HTTP semantics for precondition failure
+3. **JSONB content storage**: Flexible schema for different artifact types
+4. **Agent versioning**: Enables A/B testing and performance tracking
+5. **Cascading deletes**: Artifacts auto-delete when job is deleted
+6. **Deterministic prompts**: Strict system prompts prevent hallucination
