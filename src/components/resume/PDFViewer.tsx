@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -22,6 +22,47 @@ export function PDFViewer({ fileUrl, fileName }: PDFViewerProps) {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<Error | null>(null);
   const [scale, setScale] = useState<number>(1.0);
+  const [pdfData, setPdfData] = useState<string | null>(null);
+  const [fetchError, setFetchError] = useState<string | null>(null);
+
+  // Fetch the PDF as a blob to bypass CORS restrictions
+  useEffect(() => {
+    const fetchPdf = async () => {
+      try {
+        setIsLoading(true);
+        setFetchError(null);
+        setError(null);
+        setPdfData(null);
+
+        // Fetch the PDF as a blob
+        const response = await fetch(fileUrl);
+        if (!response.ok) {
+          throw new Error(`Failed to fetch PDF: ${response.status}`);
+        }
+
+        const blob = await response.blob();
+
+        // Convert blob to data URL for react-pdf
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          setPdfData(reader.result as string);
+        };
+        reader.onerror = () => {
+          setFetchError("Failed to read PDF file");
+          setIsLoading(false);
+        };
+        reader.readAsDataURL(blob);
+      } catch (err) {
+        console.error("Error fetching PDF:", err);
+        setFetchError(err instanceof Error ? err.message : "Failed to fetch PDF");
+        setIsLoading(false);
+      }
+    };
+
+    if (fileUrl) {
+      fetchPdf();
+    }
+  }, [fileUrl]);
 
   const onDocumentLoadSuccess = ({ numPages }: { numPages: number }) => {
     setNumPages(numPages);
@@ -41,15 +82,15 @@ export function PDFViewer({ fileUrl, fileName }: PDFViewerProps) {
   const zoomOut = () => setScale((s) => Math.max(0.5, s - 0.2));
   const resetZoom = () => setScale(1.0);
 
-  if (error) {
+  if (error || fetchError) {
     return (
       <div className="flex flex-col items-center justify-center gap-4 py-12 border rounded-lg bg-muted/50">
         <p className="text-destructive font-medium">Failed to load PDF</p>
         <p className="text-sm text-muted-foreground text-center max-w-md">
-          The PDF could not be displayed. Please download the file to view it.
+          {fetchError || "The PDF could not be displayed."} Please download the file to view it.
         </p>
         <Button asChild>
-          <a href={fileUrl} download={fileName || "resume.pdf"}>
+          <a href={fileUrl} download={fileName || "resume.pdf"} target="_blank" rel="noopener noreferrer">
             <Download className="h-4 w-4 mr-2" />
             Download PDF
           </a>
@@ -124,21 +165,23 @@ export function PDFViewer({ fileUrl, fileName }: PDFViewerProps) {
             <p className="text-sm text-muted-foreground">Loading PDF...</p>
           </div>
         )}
-        <Document
-          file={fileUrl}
-          onLoadSuccess={onDocumentLoadSuccess}
-          onLoadError={onDocumentLoadError}
-          loading={null}
-          className={isLoading ? "hidden" : ""}
-        >
-          <Page
-            pageNumber={pageNumber}
-            scale={scale}
-            renderTextLayer={true}
-            renderAnnotationLayer={true}
-            className="shadow-lg"
-          />
-        </Document>
+        {pdfData && (
+          <Document
+            file={pdfData}
+            onLoadSuccess={onDocumentLoadSuccess}
+            onLoadError={onDocumentLoadError}
+            loading={null}
+            className={isLoading ? "hidden" : ""}
+          >
+            <Page
+              pageNumber={pageNumber}
+              scale={scale}
+              renderTextLayer={true}
+              renderAnnotationLayer={true}
+              className="shadow-lg"
+            />
+          </Document>
+        )}
       </div>
     </div>
   );
