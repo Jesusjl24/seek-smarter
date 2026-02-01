@@ -8,9 +8,14 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { Briefcase, GraduationCap, Award, Building2, Clock, FileText, Download, ExternalLink } from "lucide-react";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
+import { Briefcase, GraduationCap, Award, Building2, Clock, FileText, Download } from "lucide-react";
 import type { ResumeProfile } from "@/types/job";
 
 interface ResumeViewModalProps {
@@ -20,8 +25,6 @@ interface ResumeViewModalProps {
 }
 
 export function ResumeViewModal({ profile, open, onClose }: ResumeViewModalProps) {
-  const [activeTab, setActiveTab] = useState<string>("preview");
-
   if (!profile) return null;
 
   const isPDF = profile.file_type === "application/pdf";
@@ -33,94 +36,85 @@ export function ResumeViewModal({ profile, open, onClose }: ResumeViewModalProps
     return `${supabaseUrl}/functions/v1/proxy-storage?url=${encodeURIComponent(url)}`;
   };
   
-  const previewUrl = hasFile && isPDF ? getProxiedUrl(profile.file_url!) : profile.file_url;
+  const previewUrl = hasFile && isPDF ? getProxiedUrl(profile.file_url!) : null;
+
+  const getFileTypeLabel = () => {
+    if (profile.file_type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") {
+      return "Word Document";
+    }
+    if (profile.file_type === "text/plain") {
+      return "Text File";
+    }
+    return "Document";
+  };
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
-        <DialogHeader>
-          <DialogTitle className="text-xl flex items-center gap-2">
-            <FileText className="h-5 w-5" />
-            Your Resume Profile
-          </DialogTitle>
-          {profile.file_name && (
-            <p className="text-sm text-muted-foreground">{profile.file_name}</p>
+      <DialogContent className="max-w-5xl max-h-[85vh] overflow-hidden flex flex-col">
+        <DialogHeader className="flex flex-row items-start justify-between gap-4">
+          <div className="flex-1">
+            <DialogTitle className="text-xl flex items-center gap-2">
+              <FileText className="h-5 w-5" />
+              Your Resume Profile
+            </DialogTitle>
+            {profile.file_name && (
+              <p className="text-sm text-muted-foreground mt-1">{profile.file_name}</p>
+            )}
+          </div>
+          {hasFile && (
+            <Button variant="outline" size="sm" asChild className="shrink-0">
+              <a href={profile.file_url!} download={profile.file_name || "resume"}>
+                <Download className="h-4 w-4 mr-2" />
+                Download
+              </a>
+            </Button>
           )}
         </DialogHeader>
 
-        {hasFile ? (
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col overflow-hidden">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="preview">Document Preview</TabsTrigger>
-              <TabsTrigger value="parsed">Extracted Data</TabsTrigger>
-            </TabsList>
+        <div className="flex-1 overflow-hidden flex flex-col gap-4">
+          {/* Document Preview Section */}
+          {hasFile && (
+            <div className="shrink-0">
+              {isPDF && previewUrl ? (
+                <div className="border rounded-lg overflow-hidden bg-muted">
+                  <iframe
+                    src={`${previewUrl}#toolbar=0&navpanes=0&scrollbar=1`}
+                    className="w-full h-[50vh] border-0"
+                    title="Resume PDF Preview"
+                  />
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center gap-4 py-8 border rounded-lg bg-muted/50">
+                  <FileText className="h-12 w-12 text-muted-foreground" />
+                  <div className="text-center">
+                    <p className="font-medium">{getFileTypeLabel()}</p>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      This file type cannot be previewed inline
+                    </p>
+                  </div>
+                  <Button asChild>
+                    <a href={profile.file_url!} download={profile.file_name || "resume"}>
+                      <Download className="h-4 w-4 mr-2" />
+                      Download {getFileTypeLabel()}
+                    </a>
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
 
-            <TabsContent value="preview" className="flex-1 overflow-hidden mt-4">
-              <div className="h-full flex flex-col">
-                {isPDF ? (
-                  <div className="flex-1 border rounded-lg overflow-hidden bg-muted">
-                    <iframe
-                      src={`${previewUrl}#toolbar=0&navpanes=0`}
-                      className="w-full h-[60vh]"
-                      title="Resume PDF Preview"
-                    />
-                  </div>
-                ) : (
-                  <div className="flex-1 flex flex-col items-center justify-center gap-4 py-12 border rounded-lg bg-muted/50">
-                    <FileText className="h-16 w-16 text-muted-foreground" />
-                    <div className="text-center">
-                      <p className="font-medium">
-                        {profile.file_type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                          ? "Word Document"
-                          : "Text File"}
-                      </p>
-                      <p className="text-sm text-muted-foreground mt-1">
-                        This file type cannot be previewed inline
-                      </p>
-                    </div>
-                    <div className="flex gap-2">
-                      <Button variant="outline" asChild>
-                        <a href={profile.file_url} download={profile.file_name}>
-                          <Download className="h-4 w-4 mr-2" />
-                          Download
-                        </a>
-                      </Button>
-                      <Button variant="outline" asChild>
-                        <a href={profile.file_url} target="_blank" rel="noopener noreferrer">
-                          <ExternalLink className="h-4 w-4 mr-2" />
-                          Open in New Tab
-                        </a>
-                      </Button>
-                    </div>
-                  </div>
-                )}
-                
-                {isPDF && (
-                  <div className="flex justify-end gap-2 mt-3">
-                    <Button variant="outline" size="sm" asChild>
-                      <a href={profile.file_url} download={profile.file_name}>
-                        <Download className="h-4 w-4 mr-2" />
-                        Download
-                      </a>
-                    </Button>
-                    <Button variant="outline" size="sm" asChild>
-                      <a href={profile.file_url} target="_blank" rel="noopener noreferrer">
-                        <ExternalLink className="h-4 w-4 mr-2" />
-                        Open Full Size
-                      </a>
-                    </Button>
-                  </div>
-                )}
-              </div>
-            </TabsContent>
-
-            <TabsContent value="parsed" className="flex-1 overflow-hidden mt-4">
-              <ExtractedDataView profile={profile} />
-            </TabsContent>
-          </Tabs>
-        ) : (
-          <ExtractedDataView profile={profile} />
-        )}
+          {/* Extracted Data Section */}
+          <Accordion type="single" collapsible defaultValue={hasFile ? undefined : "extracted-data"} className="flex-1 overflow-hidden">
+            <AccordionItem value="extracted-data" className="border rounded-lg">
+              <AccordionTrigger className="px-4 hover:no-underline">
+                <span className="font-semibold">Extracted Resume Data</span>
+              </AccordionTrigger>
+              <AccordionContent className="px-4 pb-4">
+                <ExtractedDataView profile={profile} />
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
+        </div>
       </DialogContent>
     </Dialog>
   );
@@ -128,11 +122,11 @@ export function ResumeViewModal({ profile, open, onClose }: ResumeViewModalProps
 
 function ExtractedDataView({ profile }: { profile: ResumeProfile }) {
   return (
-    <ScrollArea className="h-[60vh] pr-4">
-      <div className="space-y-5">
+    <ScrollArea className="max-h-[40vh] pr-4">
+      <div className="space-y-4">
         {profile.summary && (
           <div>
-            <h3 className="font-semibold mb-2">Summary</h3>
+            <h3 className="font-semibold mb-2 text-sm">Summary</h3>
             <p className="text-sm text-muted-foreground">{profile.summary}</p>
           </div>
         )}
@@ -146,91 +140,97 @@ function ExtractedDataView({ profile }: { profile: ResumeProfile }) {
 
         <Separator />
 
-        {profile.skills_technical.length > 0 && (
-          <div>
-            <h3 className="font-semibold mb-2">Technical Skills</h3>
-            <div className="flex flex-wrap gap-1.5">
-              {profile.skills_technical.map((skill) => (
-                <Badge key={skill} variant="secondary" className="text-xs">
-                  {skill}
-                </Badge>
-              ))}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {profile.skills_technical.length > 0 && (
+            <div>
+              <h3 className="font-semibold mb-2 text-sm">Technical Skills</h3>
+              <div className="flex flex-wrap gap-1.5">
+                {profile.skills_technical.map((skill) => (
+                  <Badge key={skill} variant="secondary" className="text-xs">
+                    {skill}
+                  </Badge>
+                ))}
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {profile.skills_soft.length > 0 && (
-          <div>
-            <h3 className="font-semibold mb-2">Soft Skills</h3>
-            <div className="flex flex-wrap gap-1.5">
-              {profile.skills_soft.map((skill) => (
-                <Badge key={skill} variant="outline" className="text-xs">
-                  {skill}
-                </Badge>
-              ))}
+          {profile.skills_soft.length > 0 && (
+            <div>
+              <h3 className="font-semibold mb-2 text-sm">Soft Skills</h3>
+              <div className="flex flex-wrap gap-1.5">
+                {profile.skills_soft.map((skill) => (
+                  <Badge key={skill} variant="outline" className="text-xs">
+                    {skill}
+                  </Badge>
+                ))}
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
 
         <Separator />
 
-        {profile.previous_titles.length > 0 && (
-          <div>
-            <h3 className="font-semibold mb-2 flex items-center gap-1.5">
-              <Briefcase className="h-4 w-4" />
-              Previous Roles
-            </h3>
-            <ul className="text-sm space-y-1">
-              {profile.previous_titles.map((title, i) => (
-                <li key={i} className="text-muted-foreground">• {title}</li>
-              ))}
-            </ul>
-          </div>
-        )}
-
-        {profile.industries.length > 0 && (
-          <div>
-            <h3 className="font-semibold mb-2 flex items-center gap-1.5">
-              <Building2 className="h-4 w-4" />
-              Industries
-            </h3>
-            <div className="flex flex-wrap gap-1.5">
-              {profile.industries.map((industry) => (
-                <Badge key={industry} variant="outline" className="text-xs">
-                  {industry}
-                </Badge>
-              ))}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {profile.previous_titles.length > 0 && (
+            <div>
+              <h3 className="font-semibold mb-2 text-sm flex items-center gap-1.5">
+                <Briefcase className="h-4 w-4" />
+                Previous Roles
+              </h3>
+              <ul className="text-sm space-y-1">
+                {profile.previous_titles.map((title, i) => (
+                  <li key={i} className="text-muted-foreground">• {title}</li>
+                ))}
+              </ul>
             </div>
-          </div>
-        )}
+          )}
 
-        {profile.education.length > 0 && (
-          <div>
-            <h3 className="font-semibold mb-2 flex items-center gap-1.5">
-              <GraduationCap className="h-4 w-4" />
-              Education
-            </h3>
-            <ul className="text-sm space-y-1">
-              {profile.education.map((edu, i) => (
-                <li key={i} className="text-muted-foreground">• {edu}</li>
-              ))}
-            </ul>
-          </div>
-        )}
+          {profile.industries.length > 0 && (
+            <div>
+              <h3 className="font-semibold mb-2 text-sm flex items-center gap-1.5">
+                <Building2 className="h-4 w-4" />
+                Industries
+              </h3>
+              <div className="flex flex-wrap gap-1.5">
+                {profile.industries.map((industry) => (
+                  <Badge key={industry} variant="outline" className="text-xs">
+                    {industry}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
 
-        {profile.certifications.length > 0 && (
-          <div>
-            <h3 className="font-semibold mb-2 flex items-center gap-1.5">
-              <Award className="h-4 w-4" />
-              Certifications
-            </h3>
-            <ul className="text-sm space-y-1">
-              {profile.certifications.map((cert, i) => (
-                <li key={i} className="text-muted-foreground">• {cert}</li>
-              ))}
-            </ul>
-          </div>
-        )}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {profile.education.length > 0 && (
+            <div>
+              <h3 className="font-semibold mb-2 text-sm flex items-center gap-1.5">
+                <GraduationCap className="h-4 w-4" />
+                Education
+              </h3>
+              <ul className="text-sm space-y-1">
+                {profile.education.map((edu, i) => (
+                  <li key={i} className="text-muted-foreground">• {edu}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {profile.certifications.length > 0 && (
+            <div>
+              <h3 className="font-semibold mb-2 text-sm flex items-center gap-1.5">
+                <Award className="h-4 w-4" />
+                Certifications
+              </h3>
+              <ul className="text-sm space-y-1">
+                {profile.certifications.map((cert, i) => (
+                  <li key={i} className="text-muted-foreground">• {cert}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
       </div>
     </ScrollArea>
   );
