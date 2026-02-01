@@ -1,18 +1,23 @@
 import { useState, useEffect, useCallback } from "react";
-import { AppLayout } from "@/components/layout/AppLayout";
 import { SearchBar } from "@/components/search/SearchBar";
 import { SearchFiltersPanel } from "@/components/search/SearchFilters";
 import { SearchProgress } from "@/components/search/SearchProgress";
 import { JobList } from "@/components/jobs/JobList";
-import { JobStats } from "@/components/sidebar/JobStats";
 import { ActionButtons } from "@/components/sidebar/ActionButtons";
-import { ResumeUpload } from "@/components/resume/ResumeUpload";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { fetchJobs, upsertJobs, deleteJob, saveJobMatch } from "@/lib/api/jobs";
-import { fetchResumeProfile } from "@/lib/api/resume";
-import type { JobWithMatch, ResumeProfile, SearchFilters } from "@/types/job";
+import {
+  fetchJobsByStatus,
+  upsertJobs,
+  deleteJob,
+  deleteJobs,
+  saveJobMatch,
+  updateJobStatus,
+  bulkUpdateJobStatus,
+} from "@/lib/api/jobs";
+import { useLayoutContext } from "@/components/layout/MainLayout";
+import type { JobWithMatch, SearchFilters, PipelineStatus } from "@/types/job";
 
 const defaultFilters: SearchFilters = {
   keywords: "",
@@ -26,9 +31,8 @@ const defaultFilters: SearchFilters = {
   jobLimit: "20",
 };
 
-const Index = () => {
+const Inbox = () => {
   const [jobs, setJobs] = useState<JobWithMatch[]>([]);
-  const [profile, setProfile] = useState<ResumeProfile | null>(null);
   const [filters, setFilters] = useState<SearchFilters>(defaultFilters);
   const [isSearching, setIsSearching] = useState(false);
   const [isScoringAll, setIsScoringAll] = useState(false);
@@ -36,22 +40,19 @@ const Index = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [newlyScoredJobId, setNewlyScoredJobId] = useState<string | null>(null);
   const { toast } = useToast();
+  const { profile, refreshCounts } = useLayoutContext();
 
-  // Load initial data
+  // Load inbox jobs
   useEffect(() => {
     async function loadData() {
       try {
-        const [jobsData, profileData] = await Promise.all([
-          fetchJobs(),
-          fetchResumeProfile(),
-        ]);
+        const jobsData = await fetchJobsByStatus("inbox");
         setJobs(jobsData);
-        setProfile(profileData);
       } catch (error) {
-        console.error("Error loading data:", error);
+        console.error("Error loading inbox:", error);
         toast({
-          title: "Error loading data",
-          description: "Failed to load saved jobs and profile.",
+          title: "Error loading inbox",
+          description: "Failed to load jobs.",
           variant: "destructive",
         });
       } finally {
@@ -91,11 +92,8 @@ const Index = () => {
 
       if (error) throw error;
 
-      // Check if we got jobs back
       if (!data.jobs || data.jobs.length === 0) {
-        // Distinguish between scraping errors and no matching jobs
         const diagnostics = data.diagnostics;
-        
         if (diagnostics?.possible_blocking) {
           toast({
             title: "Search blocked",
@@ -105,7 +103,7 @@ const Index = () => {
         } else if (diagnostics?.job_ids_found === 0) {
           toast({
             title: "No jobs found",
-            description: "No jobs matched your search criteria. Try broadening your filters (e.g., remove salary range, extend date range).",
+            description: "No jobs matched your search criteria. Try broadening your filters.",
           });
         } else if (data.error) {
           throw new Error(data.error);
@@ -118,7 +116,6 @@ const Index = () => {
         return;
       }
 
-      // Upsert jobs to database
       const { newCount, existingCount } = await upsertJobs(data.jobs);
 
       toast({
@@ -126,23 +123,21 @@ const Index = () => {
         description: `Found ${data.jobs.length} jobs (${newCount} new, ${existingCount} already saved)`,
       });
 
-      // Refresh job list
-      const updatedJobs = await fetchJobs();
+      // Refresh job list and counts
+      const updatedJobs = await fetchJobsByStatus("inbox");
       setJobs(updatedJobs);
+      await refreshCounts();
     } catch (error) {
       console.error("Search error:", error);
       toast({
         title: "Search failed",
-        description:
-          error instanceof Error
-            ? error.message
-            : "Unable to fetch jobs from SEEK. Please try again.",
+        description: error instanceof Error ? error.message : "Unable to fetch jobs from SEEK.",
         variant: "destructive",
       });
     } finally {
       setIsSearching(false);
     }
-  }, [filters, toast]);
+  }, [filters, toast, refreshCounts]);
 
   const handleScoreJob = useCallback(
     async (jobId: string) => {
@@ -167,7 +162,6 @@ const Index = () => {
         if (error) throw error;
         if (data.error) throw new Error(data.error);
 
-        // Save match to database
         await saveJobMatch({
           job_id: jobId,
           resume_profile_id: profile.id,
@@ -181,44 +175,50 @@ const Index = () => {
           strategic_advice: data.strategic_advice,
         });
 
-        // Update local state
-        setJobs((prev) =>
-          prev.map((j) =>
-            j.id === jobId
-              ? {
-                  ...j,
-                  match: {
-                    id: "",
-                    job_id: jobId,
-                    resume_profile_id: profile.id,
-                    scored_at: new Date().toISOString(),
-                    ...data,
-                  },
-                }
-              : j
-          )
-        );
-
-        // Show the analysis popup
-        setNewlyScoredJobId(jobId);
-
-        toast({
-          title: "Job scored",
-          description: `${data.recommendation} - ${data.match_score}% match`,
-        });
+        // Auto-move to not_fit if score < 50 and still in inbox
+        if (data.match_score < 50 && job.pipeline_status === "inbox") {
+          await updateJobStatus(jobId, "not_fit");
+          setJobs((prev) => prev.filter((j) => j.id !== jobId));
+          toast({
+            title: "Job scored & moved",
+            description: `${data.recommendation} (${data.match_score}%) - Auto-moved to Not a Fit`,
+          });
+          await refreshCounts();
+        } else {
+          setJobs((prev) =>
+            prev.map((j) =>
+              j.id === jobId
+                ? {
+                    ...j,
+                    match: {
+                      id: "",
+                      job_id: jobId,
+                      resume_profile_id: profile.id,
+                      scored_at: new Date().toISOString(),
+                      ...data,
+                    },
+                  }
+                : j
+            )
+          );
+          setNewlyScoredJobId(jobId);
+          toast({
+            title: "Job scored",
+            description: `${data.recommendation} - ${data.match_score}% match`,
+          });
+        }
       } catch (error) {
         console.error("Scoring error:", error);
         toast({
           title: "Scoring failed",
-          description:
-            error instanceof Error ? error.message : "Failed to score job.",
+          description: error instanceof Error ? error.message : "Failed to score job.",
           variant: "destructive",
         });
       } finally {
         setScoringJobId(null);
       }
     },
-    [jobs, profile, toast]
+    [jobs, profile, toast, refreshCounts]
   );
 
   const handleScoreAll = useCallback(async () => {
@@ -243,6 +243,7 @@ const Index = () => {
     setIsScoringAll(true);
     let scored = 0;
     let failed = 0;
+    let movedToNotFit = 0;
 
     for (const job of unscoredJobs) {
       try {
@@ -269,26 +270,30 @@ const Index = () => {
           strategic_advice: data.strategic_advice,
         });
 
-        setJobs((prev) =>
-          prev.map((j) =>
-            j.id === job.id
-              ? {
-                  ...j,
-                  match: {
-                    id: "",
-                    job_id: job.id,
-                    resume_profile_id: profile.id,
-                    scored_at: new Date().toISOString(),
-                    ...data,
-                  },
-                }
-              : j
-          )
-        );
+        // Auto-move low scores
+        if (data.match_score < 50 && job.pipeline_status === "inbox") {
+          await updateJobStatus(job.id, "not_fit");
+          movedToNotFit++;
+        } else {
+          setJobs((prev) =>
+            prev.map((j) =>
+              j.id === job.id
+                ? {
+                    ...j,
+                    match: {
+                      id: "",
+                      job_id: job.id,
+                      resume_profile_id: profile.id,
+                      scored_at: new Date().toISOString(),
+                      ...data,
+                    },
+                  }
+                : j
+            )
+          );
+        }
 
         scored++;
-
-        // Small delay to avoid rate limiting
         await new Promise((r) => setTimeout(r, 1000));
       } catch (error) {
         console.error(`Failed to score job ${job.id}:`, error);
@@ -299,146 +304,109 @@ const Index = () => {
     setScoringJobId(null);
     setIsScoringAll(false);
 
+    // Remove jobs that were moved to not_fit
+    if (movedToNotFit > 0) {
+      const updatedJobs = await fetchJobsByStatus("inbox");
+      setJobs(updatedJobs);
+      await refreshCounts();
+    }
+
     toast({
       title: "Batch scoring complete",
-      description: `Scored ${scored} jobs${failed > 0 ? `, ${failed} failed` : ""}`,
+      description: `Scored ${scored} jobs${movedToNotFit > 0 ? `, ${movedToNotFit} auto-moved to Not a Fit` : ""}${failed > 0 ? `, ${failed} failed` : ""}`,
     });
-  }, [jobs, profile, toast]);
+  }, [jobs, profile, toast, refreshCounts]);
 
   const handleDeleteJob = useCallback(
     async (jobId: string) => {
       try {
         await deleteJob(jobId);
         setJobs((prev) => prev.filter((j) => j.id !== jobId));
-        toast({
-          title: "Job deleted",
-          description: "Job has been removed from your list.",
-        });
+        await refreshCounts();
+        toast({ title: "Job deleted" });
       } catch (error) {
-        console.error("Delete error:", error);
-        toast({
-          title: "Delete failed",
-          description: "Failed to delete job.",
-          variant: "destructive",
-        });
+        toast({ title: "Delete failed", variant: "destructive" });
       }
     },
-    [toast]
+    [toast, refreshCounts]
   );
 
   const handleDeleteMultiple = useCallback(
     async (jobIds: string[]) => {
       try {
-        await Promise.all(jobIds.map((id) => deleteJob(id)));
+        await deleteJobs(jobIds);
         setJobs((prev) => prev.filter((j) => !jobIds.includes(j.id)));
-        toast({
-          title: "Jobs deleted",
-          description: `${jobIds.length} job${jobIds.length > 1 ? 's' : ''} removed from your list.`,
-        });
+        await refreshCounts();
+        toast({ title: `${jobIds.length} jobs deleted` });
       } catch (error) {
-        console.error("Delete error:", error);
-        toast({
-          title: "Delete failed",
-          description: "Failed to delete some jobs.",
-          variant: "destructive",
-        });
+        toast({ title: "Delete failed", variant: "destructive" });
       }
     },
-    [toast]
+    [toast, refreshCounts]
+  );
+
+  const handleMoveToStatus = useCallback(
+    async (jobId: string, status: PipelineStatus) => {
+      try {
+        await updateJobStatus(jobId, status);
+        setJobs((prev) => prev.filter((j) => j.id !== jobId));
+        await refreshCounts();
+        toast({ title: `Moved to ${status.replace("_", " ")}` });
+      } catch (error) {
+        toast({ title: "Move failed", variant: "destructive" });
+      }
+    },
+    [toast, refreshCounts]
+  );
+
+  const handleBulkMoveToStatus = useCallback(
+    async (jobIds: string[], status: PipelineStatus) => {
+      try {
+        await bulkUpdateJobStatus(jobIds, status);
+        setJobs((prev) => prev.filter((j) => !jobIds.includes(j.id)));
+        await refreshCounts();
+        toast({ title: `${jobIds.length} jobs moved to ${status.replace("_", " ")}` });
+      } catch (error) {
+        toast({ title: "Move failed", variant: "destructive" });
+      }
+    },
+    [toast, refreshCounts]
   );
 
   const handleExport = useCallback(() => {
     if (jobs.length === 0) return;
 
     const headers = [
-      "Title",
-      "Company",
-      "Location",
-      "Salary",
-      "Work Type",
-      "Work Arrangement",
-      "Match Score",
-      "Recommendation",
-      "URL",
-      "Date Posted",
-      "Date Scraped",
+      "Title", "Company", "Location", "Salary", "Work Type", "Work Arrangement",
+      "Match Score", "Recommendation", "URL", "Date Posted", "Date Scraped",
     ];
 
     const rows = jobs.map((job) => [
-      job.title,
-      job.company,
-      job.location,
-      job.salary_range || "",
-      job.work_type || "",
-      job.work_arrangement || "",
-      job.match?.match_score?.toString() || "",
-      job.match?.recommendation || "",
-      job.job_url,
-      job.date_posted || "",
-      job.date_scraped,
+      job.title, job.company, job.location, job.salary_range || "",
+      job.work_type || "", job.work_arrangement || "",
+      job.match?.match_score?.toString() || "", job.match?.recommendation || "",
+      job.job_url, job.date_posted || "", job.date_scraped,
     ]);
 
     const csv = [headers.join(","), ...rows.map((r) => r.map((c) => `"${c}"`).join(","))].join("\n");
-
     const blob = new Blob([csv], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `job-search-${new Date().toISOString().split("T")[0]}.csv`;
+    a.download = `job-inbox-${new Date().toISOString().split("T")[0]}.csv`;
     a.click();
     URL.revokeObjectURL(url);
-
-    toast({
-      title: "Export complete",
-      description: `Exported ${jobs.length} jobs to CSV.`,
-    });
+    toast({ title: "Export complete", description: `Exported ${jobs.length} jobs to CSV.` });
   }, [jobs, toast]);
 
-  // Calculate stats
-  const todayStart = new Date();
-  todayStart.setHours(0, 0, 0, 0);
-  const recentJobs = jobs.filter(
-    (j) => new Date(j.date_scraped) >= todayStart
-  ).length;
-  const scoredJobs = jobs.filter((j) => j.match).length;
   const unscoredCount = jobs.filter((j) => !j.match).length;
-
-  const sidebar = (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-xl font-bold mb-1">JS-Searcher</h1>
-        <p className="text-sm text-muted-foreground">
-          AI-powered SEEK job matcher
-        </p>
-      </div>
-
-      <Separator />
-
-      <ResumeUpload profile={profile} onProfileUpdate={setProfile} />
-
-      <Separator />
-
-      <SearchFiltersPanel filters={filters} onFiltersChange={setFilters} />
-
-      <Separator />
-
-      <ActionButtons
-        onScoreAll={handleScoreAll}
-        onExport={handleExport}
-        isScoring={isScoringAll}
-        hasJobs={jobs.length > 0}
-        hasResume={!!profile}
-        unscoredCount={unscoredCount}
-      />
-    </div>
-  );
 
   if (isLoading) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
+      <div className="flex items-center justify-center py-12">
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-muted-foreground">Loading...</p>
+          <p className="text-muted-foreground">Loading inbox...</p>
         </div>
       </div>
     );
@@ -447,41 +415,54 @@ const Index = () => {
   return (
     <>
       <SearchProgress isSearching={isSearching} jobLimit={parseInt(filters.jobLimit) || 20} />
-      <AppLayout sidebar={sidebar}>
-        <div className="space-y-6">
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold mb-1">Inbox</h1>
+          <p className="text-muted-foreground">New jobs land here. File them into Shortlist or Not a Fit.</p>
+        </div>
+
         <SearchBar
           keywords={filters.keywords}
           location={filters.location}
-          onKeywordsChange={(keywords) =>
-            setFilters((f) => ({ ...f, keywords }))
-          }
-          onLocationChange={(location) =>
-            setFilters((f) => ({ ...f, location }))
-          }
+          onKeywordsChange={(keywords) => setFilters((f) => ({ ...f, keywords }))}
+          onLocationChange={(location) => setFilters((f) => ({ ...f, location }))}
           onSearch={handleSearch}
           isLoading={isSearching}
         />
 
-        <JobStats
-          totalJobs={jobs.length}
-          scoredJobs={scoredJobs}
-          recentJobs={recentJobs}
-        />
-
-        <JobList
-          jobs={jobs}
-          onScore={handleScoreJob}
-          onDelete={handleDeleteJob}
-          onDeleteMultiple={handleDeleteMultiple}
-          scoringJobId={scoringJobId}
-          hasResume={!!profile}
-          newlyScoredJobId={newlyScoredJobId}
-          onScoredJobViewed={() => setNewlyScoredJobId(null)}
-        />
+        <div className="flex flex-col lg:flex-row gap-6">
+          <div className="lg:w-64 flex-shrink-0 space-y-4">
+            <SearchFiltersPanel filters={filters} onFiltersChange={setFilters} />
+            <Separator />
+            <ActionButtons
+              onScoreAll={handleScoreAll}
+              onExport={handleExport}
+              isScoring={isScoringAll}
+              hasJobs={jobs.length > 0}
+              hasResume={!!profile}
+              unscoredCount={unscoredCount}
+            />
+          </div>
+          <div className="flex-1">
+            <JobList
+              jobs={jobs}
+              onScore={handleScoreJob}
+              onDelete={handleDeleteJob}
+              onDeleteMultiple={handleDeleteMultiple}
+              onShortlist={(jobId) => handleMoveToStatus(jobId, "shortlist")}
+              onNotAFit={(jobId) => handleMoveToStatus(jobId, "not_fit")}
+              onBulkShortlist={(jobIds) => handleBulkMoveToStatus(jobIds, "shortlist")}
+              onBulkNotAFit={(jobIds) => handleBulkMoveToStatus(jobIds, "not_fit")}
+              scoringJobId={scoringJobId}
+              hasResume={!!profile}
+              newlyScoredJobId={newlyScoredJobId}
+              onScoredJobViewed={() => setNewlyScoredJobId(null)}
+            />
+          </div>
         </div>
-      </AppLayout>
+      </div>
     </>
   );
 };
 
-export default Index;
+export default Inbox;

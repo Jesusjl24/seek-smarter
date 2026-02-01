@@ -1,5 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
-import type { Job, JobWithMatch, JobMatch, ScrapedJob } from "@/types/job";
+import type { Job, JobWithMatch, JobMatch, ScrapedJob, PipelineStatus, PipelineCounts } from "@/types/job";
 
 /**
  * Converts relative date strings like "3d ago", "1d ago", "Today", "Yesterday"
@@ -80,6 +80,65 @@ export async function fetchJobs(): Promise<JobWithMatch[]> {
   })) as JobWithMatch[];
 }
 
+export async function fetchJobsByStatus(
+  status: PipelineStatus | PipelineStatus[]
+): Promise<JobWithMatch[]> {
+  const statuses = Array.isArray(status) ? status : [status];
+  
+  const { data: jobs, error: jobsError } = await supabase
+    .from("jobs")
+    .select("*")
+    .in("pipeline_status", statuses)
+    .order("updated_at", { ascending: false });
+
+  if (jobsError) throw jobsError;
+
+  const { data: matches, error: matchesError } = await supabase
+    .from("job_matches")
+    .select("*");
+
+  if (matchesError) throw matchesError;
+
+  const matchMap = new Map<string, JobMatch>();
+  matches?.forEach((match) => {
+    matchMap.set(match.job_id, match as JobMatch);
+  });
+
+  return (jobs || []).map((job) => ({
+    ...job,
+    match: matchMap.get(job.id),
+  })) as JobWithMatch[];
+}
+
+export async function fetchPipelineCounts(): Promise<PipelineCounts> {
+  const { data, error } = await supabase
+    .from("jobs")
+    .select("pipeline_status");
+
+  if (error) throw error;
+
+  const counts: PipelineCounts = {
+    inbox: 0,
+    shortlist: 0,
+    not_fit: 0,
+    applied: 0,
+    interview: 0,
+    offer: 0,
+  };
+
+  (data || []).forEach((job) => {
+    const status = job.pipeline_status as PipelineStatus;
+    if (status === 'inbox') counts.inbox++;
+    else if (status === 'shortlist') counts.shortlist++;
+    else if (status === 'not_fit' || status === 'rejected' || status === 'withdrawn') counts.not_fit++;
+    else if (status === 'applied' || status === 'screening') counts.applied++;
+    else if (status === 'interview' || status === 'final_interview') counts.interview++;
+    else if (status === 'offer') counts.offer++;
+  });
+
+  return counts;
+}
+
 export async function upsertJobs(
   scrapedJobs: ScrapedJob[]
 ): Promise<{ newCount: number; existingCount: number }> {
@@ -90,6 +149,12 @@ export async function upsertJobs(
 
   for (const job of scrapedJobs) {
     try {
+      // Skip placeholder jobs
+      if (/^SEEK Job #\d+$/i.test(job.title) || job.company === 'View on SEEK') {
+        console.warn('Skipping placeholder job:', job.seek_job_id);
+        continue;
+      }
+
       const { data: existing } = await supabase
         .from("jobs")
         .select("id")
@@ -119,6 +184,7 @@ export async function upsertJobs(
           description_snippet: job.description_snippet || '',
           job_url: job.job_url,
           date_posted: parseRelativeDate(job.date_posted),
+          pipeline_status: 'inbox',
         });
         
         if (insertError) {
@@ -138,6 +204,44 @@ export async function upsertJobs(
 
 export async function deleteJob(jobId: string): Promise<void> {
   const { error } = await supabase.from("jobs").delete().eq("id", jobId);
+  if (error) throw error;
+}
+
+export async function deleteJobs(jobIds: string[]): Promise<void> {
+  const { error } = await supabase.from("jobs").delete().in("id", jobIds);
+  if (error) throw error;
+}
+
+export async function updateJobStatus(
+  jobId: string,
+  status: PipelineStatus
+): Promise<void> {
+  const { error } = await supabase
+    .from("jobs")
+    .update({ pipeline_status: status })
+    .eq("id", jobId);
+  if (error) throw error;
+}
+
+export async function bulkUpdateJobStatus(
+  jobIds: string[],
+  status: PipelineStatus
+): Promise<void> {
+  const { error } = await supabase
+    .from("jobs")
+    .update({ pipeline_status: status })
+    .in("id", jobIds);
+  if (error) throw error;
+}
+
+export async function updateJobNotes(
+  jobId: string,
+  notes: string
+): Promise<void> {
+  const { error } = await supabase
+    .from("jobs")
+    .update({ notes })
+    .eq("id", jobId);
   if (error) throw error;
 }
 

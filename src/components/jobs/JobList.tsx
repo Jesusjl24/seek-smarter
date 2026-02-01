@@ -3,7 +3,7 @@ import { JobCard } from "./JobCard";
 import { JobDetailModal } from "./JobDetailModal";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Trash2 } from "lucide-react";
+import { Trash2, Star, XCircle } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -22,6 +22,10 @@ interface JobListProps {
   onScore: (jobId: string) => void;
   onDelete: (jobId: string) => void;
   onDeleteMultiple: (jobIds: string[]) => void;
+  onShortlist: (jobId: string) => void;
+  onNotAFit: (jobId: string) => void;
+  onBulkShortlist: (jobIds: string[]) => void;
+  onBulkNotAFit: (jobIds: string[]) => void;
   scoringJobId: string | null;
   hasResume: boolean;
   newlyScoredJobId?: string | null;
@@ -33,6 +37,10 @@ export function JobList({
   onScore,
   onDelete,
   onDeleteMultiple,
+  onShortlist,
+  onNotAFit,
+  onBulkShortlist,
+  onBulkNotAFit,
   scoringJobId,
   hasResume,
   newlyScoredJobId,
@@ -87,6 +95,16 @@ export function JobList({
     }
   };
 
+  const handleBulkShortlist = () => {
+    onBulkShortlist([...selectedIds]);
+    setSelectedIds(new Set());
+  };
+
+  const handleBulkNotAFit = () => {
+    onBulkNotAFit([...selectedIds]);
+    setSelectedIds(new Set());
+  };
+
   const handleDeleteSelected = () => {
     onDeleteMultiple([...selectedIds]);
     setSelectedIds(new Set());
@@ -100,7 +118,7 @@ export function JobList({
   if (jobs.length === 0) {
     return (
       <div className="text-center py-12 text-muted-foreground">
-        <p className="text-lg">No jobs found</p>
+        <p className="text-lg">No jobs in inbox</p>
         <p className="text-sm mt-1">Search for jobs to get started</p>
       </div>
     );
@@ -111,7 +129,7 @@ export function JobList({
 
   return (
     <>
-      <div className="flex items-center justify-between mb-4 pb-4 border-b">
+      <div className="flex items-center justify-between mb-4 pb-4 border-b flex-wrap gap-2">
         <div className="flex items-center gap-3">
           <Checkbox
             checked={allSelected}
@@ -128,31 +146,40 @@ export function JobList({
               : `${jobs.length} jobs`}
           </span>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           {selectedIds.size > 0 && (
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button variant="destructive" size="sm">
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  Delete Selected ({selectedIds.size})
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Delete selected jobs?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    This will permanently delete {selectedIds.size} job{selectedIds.size > 1 ? 's' : ''} from your list.
-                    This action cannot be undone.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction onClick={handleDeleteSelected} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                    Delete
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
+            <>
+              <Button variant="outline" size="sm" onClick={handleBulkShortlist}>
+                <Star className="h-4 w-4 mr-2" />
+                Shortlist ({selectedIds.size})
+              </Button>
+              <Button variant="outline" size="sm" onClick={handleBulkNotAFit}>
+                <XCircle className="h-4 w-4 mr-2" />
+                Not a Fit ({selectedIds.size})
+              </Button>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="destructive" size="sm">
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Delete ({selectedIds.size})
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Delete selected jobs?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This will permanently delete {selectedIds.size} job{selectedIds.size > 1 ? 's' : ''}.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleDeleteSelected} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                      Delete
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </>
           )}
           <AlertDialog>
             <AlertDialogTrigger asChild>
@@ -165,8 +192,7 @@ export function JobList({
               <AlertDialogHeader>
                 <AlertDialogTitle>Delete all jobs?</AlertDialogTitle>
                 <AlertDialogDescription>
-                  This will permanently delete all {jobs.length} jobs from your list.
-                  This action cannot be undone.
+                  This will permanently delete all {jobs.length} jobs from inbox.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
@@ -188,6 +214,8 @@ export function JobList({
             onScore={onScore}
             onDelete={onDelete}
             onViewDetails={setSelectedJob}
+            onShortlist={onShortlist}
+            onNotAFit={onNotAFit}
             isScoring={scoringJobId === job.id}
             hasResume={hasResume}
             isSelected={selectedIds.has(job.id)}

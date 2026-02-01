@@ -84,9 +84,12 @@ export type Database = {
           id: string
           job_url: string
           location: string
+          notes: string | null
+          pipeline_status: string
           salary_range: string | null
           seek_job_id: string
           title: string
+          updated_at: string | null
           work_arrangement: string | null
           work_type: string | null
         }
@@ -99,9 +102,12 @@ export type Database = {
           id?: string
           job_url: string
           location: string
+          notes?: string | null
+          pipeline_status?: string
           salary_range?: string | null
           seek_job_id: string
           title: string
+          updated_at?: string | null
           work_arrangement?: string | null
           work_type?: string | null
         }
@@ -114,9 +120,12 @@ export type Database = {
           id?: string
           job_url?: string
           location?: string
+          notes?: string | null
+          pipeline_status?: string
           salary_range?: string | null
           seek_job_id?: string
           title?: string
+          updated_at?: string | null
           work_arrangement?: string | null
           work_type?: string | null
         }
