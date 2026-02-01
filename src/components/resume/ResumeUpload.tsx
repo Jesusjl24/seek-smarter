@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { saveResumeProfile } from "@/lib/api/resume";
+import { saveResumeProfile, uploadResumeFile } from "@/lib/api/resume";
 import { ResumeViewModal } from "./ResumeViewModal";
 import type { ResumeProfile } from "@/types/job";
 import { formatDistanceToNow } from "date-fns";
@@ -51,7 +51,10 @@ export function ResumeUpload({ profile, onProfileUpdate }: ResumeUploadProps) {
     setIsUploading(true);
 
     try {
-      // Convert file to base64
+      // Step 1: Upload file to Supabase Storage
+      const { url: fileUrl } = await uploadResumeFile(file);
+      
+      // Step 2: Convert file to base64 for AI parsing
       const reader = new FileReader();
       const base64 = await new Promise<string>((resolve, reject) => {
         reader.onload = () => {
@@ -62,7 +65,7 @@ export function ResumeUpload({ profile, onProfileUpdate }: ResumeUploadProps) {
         reader.readAsDataURL(file);
       });
 
-      // Call edge function to parse resume
+      // Step 3: Call edge function to parse resume
       const { data, error } = await supabase.functions.invoke("parse-resume", {
         body: {
           fileContent: base64,
@@ -73,8 +76,14 @@ export function ResumeUpload({ profile, onProfileUpdate }: ResumeUploadProps) {
 
       if (error) throw error;
 
-      // Save parsed profile to database
-      const savedProfile = await saveResumeProfile(data);
+      // Step 4: Save parsed profile with file URL to database
+      const savedProfile = await saveResumeProfile({
+        ...data,
+        file_url: fileUrl,
+        file_name: file.name,
+        file_type: file.type,
+      });
+      
       onProfileUpdate(savedProfile);
 
       toast({
@@ -120,6 +129,11 @@ export function ResumeUpload({ profile, onProfileUpdate }: ResumeUploadProps) {
                   })}
                 </span>
               </div>
+              {profile.file_name && (
+                <p className="text-xs text-muted-foreground truncate">
+                  {profile.file_name}
+                </p>
+              )}
               {profile.summary && (
                 <p className="text-xs text-muted-foreground line-clamp-2">
                   {profile.summary}
