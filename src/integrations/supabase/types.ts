@@ -185,6 +185,9 @@ export type Database = {
         Row: {
           certifications: string[] | null
           education: string[] | null
+          file_name: string | null
+          file_type: string | null
+          file_url: string | null
           id: string
           industries: string[] | null
           previous_titles: string[] | null
@@ -198,6 +201,9 @@ export type Database = {
         Insert: {
           certifications?: string[] | null
           education?: string[] | null
+          file_name?: string | null
+          file_type?: string | null
+          file_url?: string | null
           id?: string
           industries?: string[] | null
           previous_titles?: string[] | null
@@ -211,6 +217,9 @@ export type Database = {
         Update: {
           certifications?: string[] | null
           education?: string[] | null
+          file_name?: string | null
+          file_type?: string | null
+          file_url?: string | null
           id?: string
           industries?: string[] | null
           previous_titles?: string[] | null
