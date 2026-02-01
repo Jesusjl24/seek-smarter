@@ -91,15 +91,30 @@ const Index = () => {
 
       if (error) throw error;
 
-      if (!data.success) {
-        throw new Error(data.error || "Scraping failed");
-      }
-
-      if (data.jobs.length === 0) {
-        toast({
-          title: "No jobs found",
-          description: "Try different keywords or adjust your filters.",
-        });
+      // Check if we got jobs back
+      if (!data.jobs || data.jobs.length === 0) {
+        // Distinguish between scraping errors and no matching jobs
+        const diagnostics = data.diagnostics;
+        
+        if (diagnostics?.possible_blocking) {
+          toast({
+            title: "Search blocked",
+            description: "SEEK may be blocking automated searches. Please try again in a few minutes.",
+            variant: "destructive",
+          });
+        } else if (diagnostics?.job_ids_found === 0) {
+          toast({
+            title: "No jobs found",
+            description: "No jobs matched your search criteria. Try broadening your filters (e.g., remove salary range, extend date range).",
+          });
+        } else if (data.error) {
+          throw new Error(data.error);
+        } else {
+          toast({
+            title: "No jobs found",
+            description: diagnostics?.message || "Try different keywords or adjust your filters.",
+          });
+        }
         return;
       }
 
