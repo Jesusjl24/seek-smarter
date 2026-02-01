@@ -1,6 +1,60 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { Job, JobWithMatch, JobMatch, ScrapedJob } from "@/types/job";
 
+/**
+ * Converts relative date strings like "3d ago", "1d ago", "Today", "Yesterday"
+ * to ISO date strings. Returns null if parsing fails.
+ */
+function parseRelativeDate(dateStr: string | undefined | null): string | null {
+  if (!dateStr) return null;
+  
+  const normalized = dateStr.trim().toLowerCase();
+  const today = new Date();
+  
+  // Handle "Xd ago" format
+  const daysAgoMatch = normalized.match(/^(\d+)d\s*ago$/i);
+  if (daysAgoMatch) {
+    const daysAgo = parseInt(daysAgoMatch[1], 10);
+    const date = new Date(today);
+    date.setDate(date.getDate() - daysAgo);
+    return date.toISOString().split('T')[0];
+  }
+  
+  // Handle "Xh ago" format (same day)
+  const hoursAgoMatch = normalized.match(/^(\d+)h\s*ago$/i);
+  if (hoursAgoMatch) {
+    return today.toISOString().split('T')[0];
+  }
+  
+  // Handle "Xm ago" format (same day)
+  const minsAgoMatch = normalized.match(/^(\d+)m\s*ago$/i);
+  if (minsAgoMatch) {
+    return today.toISOString().split('T')[0];
+  }
+  
+  // Handle "today" or "just posted"
+  if (normalized === 'today' || normalized === 'just posted' || normalized === 'just now') {
+    return today.toISOString().split('T')[0];
+  }
+  
+  // Handle "yesterday"
+  if (normalized === 'yesterday') {
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    return yesterday.toISOString().split('T')[0];
+  }
+  
+  // Try parsing as ISO date directly
+  const isoMatch = dateStr.match(/^\d{4}-\d{2}-\d{2}/);
+  if (isoMatch) {
+    return isoMatch[0];
+  }
+  
+  // If we can't parse it, return null rather than an invalid date
+  console.warn('Could not parse date:', dateStr);
+  return null;
+}
+
 export async function fetchJobs(): Promise<JobWithMatch[]> {
   const { data: jobs, error: jobsError } = await supabase
     .from("jobs")
@@ -64,7 +118,7 @@ export async function upsertJobs(
           work_arrangement: job.work_arrangement || null,
           description_snippet: job.description_snippet || '',
           job_url: job.job_url,
-          date_posted: job.date_posted || null,
+          date_posted: parseRelativeDate(job.date_posted),
         });
         
         if (insertError) {
