@@ -1,6 +1,8 @@
-import { Inbox, Star, XCircle, FlaskConical } from "lucide-react";
+import { Inbox, Star, XCircle, FlaskConical, LogOut } from "lucide-react";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { NavLink } from "@/components/NavLink";
+import { Button } from "@/components/ui/button";
+import { useAuth } from "@/hooks/useAuth";
 import { Badge } from "@/components/ui/badge";
 import {
   Sidebar,
@@ -32,6 +34,7 @@ const navItems = [
 ];
 
 export function AppSidebar({ profile, onProfileUpdate, counts }: AppSidebarProps) {
+  const { user, signOut } = useAuth();
   return (
     <Sidebar>
       <SidebarHeader className="p-4">
@@ -85,7 +88,7 @@ export function AppSidebar({ profile, onProfileUpdate, counts }: AppSidebarProps
         </SidebarGroup>
       </SidebarContent>
 
-      <SidebarFooter className="p-4">
+      <SidebarFooter className="p-4 space-y-3">
         <div className="grid grid-cols-3 gap-2 text-center text-xs">
           <div className="bg-muted/50 rounded-lg p-2">
             <div className="font-semibold">{counts.applied}</div>
@@ -100,6 +103,16 @@ export function AppSidebar({ profile, onProfileUpdate, counts }: AppSidebarProps
             <div className="text-muted-foreground">Offers</div>
           </div>
         </div>
+        {user && (
+          <div className="flex items-center gap-2">
+            <div className="flex-1 truncate text-xs text-muted-foreground" title={user.email ?? ""}>
+              {user.email}
+            </div>
+            <Button variant="ghost" size="icon" onClick={signOut} title="Sign out">
+              <LogOut className="h-4 w-4" />
+            </Button>
+          </div>
+        )}
       </SidebarFooter>
     </Sidebar>
   );
