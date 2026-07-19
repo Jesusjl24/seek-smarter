@@ -63,7 +63,7 @@ export async function saveResumeProfile(
     // Update existing profile
     const { data, error } = await supabase
       .from("resume_profile")
-      .update(profileData)
+      .update(profileData as never)
       .eq("id", existing.id)
       .select()
       .single();
