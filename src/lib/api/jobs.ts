@@ -301,6 +301,7 @@ export async function saveJobMatch(match: Omit<JobMatch, "id" | "scored_at">): P
 // Fetch artifacts for a specific job
 export async function fetchJobArtifacts(jobId: string): Promise<JobArtifact[]> {
   if (isGuest()) return guestFetchArtifacts(jobId);
+  const { data, error } = await supabase
     .from("job_artifacts")
     .select("*")
     .eq("job_id", jobId)
@@ -340,6 +341,7 @@ export async function generateTailoredResume(
   matchScore: number
 ): Promise<TailoredResume> {
   if (isGuest()) return guestTailorResume(job as JobWithMatch);
+  const { data, error } = await supabase.functions.invoke("tailor-resume", {
     body: {
       job: {
         title: job.title,
@@ -366,6 +368,7 @@ export async function generateCoverLetter(
   tailoredHighlights?: string[]
 ): Promise<CoverLetter> {
   if (isGuest()) return guestCoverLetter(job as JobWithMatch);
+  const { data, error } = await supabase.functions.invoke("generate-cover-letter", {
     body: {
       job: {
         title: job.title,
