@@ -115,7 +115,16 @@ export function AppSidebar({ profile, onProfileUpdate, counts, isGuest, onExitGu
             <div className="text-muted-foreground">Offers</div>
           </div>
         </div>
-        {user && (
+        {isGuest ? (
+          <div className="flex items-center gap-2">
+            <div className="flex-1 truncate text-xs text-muted-foreground">
+              Guest demo
+            </div>
+            <Button variant="ghost" size="icon" onClick={onExitGuest} title="Exit demo">
+              <DoorOpen className="h-4 w-4" />
+            </Button>
+          </div>
+        ) : user ? (
           <div className="flex items-center gap-2">
             <div className="flex-1 truncate text-xs text-muted-foreground" title={user.email ?? ""}>
               {user.email}
@@ -124,7 +133,7 @@ export function AppSidebar({ profile, onProfileUpdate, counts, isGuest, onExitGu
               <LogOut className="h-4 w-4" />
             </Button>
           </div>
-        )}
+        ) : null}
       </SidebarFooter>
     </Sidebar>
   );
