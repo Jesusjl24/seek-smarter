@@ -110,6 +110,16 @@ export default function AuthPage() {
           <Button variant="outline" className="w-full" onClick={handleGoogle} disabled={busy}>
             Continue with Google
           </Button>
+          <Button
+            variant="ghost"
+            className="w-full mt-2"
+            onClick={() => navigate("/guest")}
+          >
+            Continue as Guest Demo
+          </Button>
+          <p className="mt-4 text-xs text-muted-foreground text-center">
+            Your resume and job pipeline are private to your account.
+          </p>
         </CardContent>
       </Card>
     </div>
