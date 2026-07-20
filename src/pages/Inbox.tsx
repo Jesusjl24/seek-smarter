@@ -74,6 +74,15 @@ const Inbox = () => {
     }
 
     setIsSearching(true);
+    if (isGuest()) {
+      await new Promise((r) => setTimeout(r, 600));
+      setIsSearching(false);
+      toast({
+        title: "Guest demo",
+        description: "Live SEEK scraping is disabled in guest mode. Sample jobs are already loaded.",
+      });
+      return;
+    }
     try {
       const { data, error } = await supabase.functions.invoke("scrape-seek", {
         body: {
