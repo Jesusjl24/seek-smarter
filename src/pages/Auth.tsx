@@ -59,8 +59,8 @@ export default function AuthPage() {
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md">
         <CardHeader>
-          <CardTitle>JS-Searcher</CardTitle>
-          <CardDescription>Sign in to access your job pipeline</CardDescription>
+          <CardTitle>Seek Smarter</CardTitle>
+          <CardDescription>Private AI cockpit for your SEEK job search.</CardDescription>
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="signin">
