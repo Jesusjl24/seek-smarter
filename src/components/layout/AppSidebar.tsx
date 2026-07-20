@@ -1,4 +1,4 @@
-import { Inbox, Star, XCircle, FlaskConical, LogOut } from "lucide-react";
+import { Inbox, Star, XCircle, FlaskConical, LogOut, Sparkles, DoorOpen } from "lucide-react";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { NavLink } from "@/components/NavLink";
 import { Button } from "@/components/ui/button";
@@ -24,6 +24,8 @@ interface AppSidebarProps {
   profile: ResumeProfile | null;
   onProfileUpdate: (profile: ResumeProfile | null) => void;
   counts: PipelineCounts;
+  isGuest?: boolean;
+  onExitGuest?: () => void;
 }
 
 const navItems = [
@@ -33,20 +35,30 @@ const navItems = [
   { title: "AI Lab", url: "/ai-lab", icon: FlaskConical, countKey: null },
 ];
 
-export function AppSidebar({ profile, onProfileUpdate, counts }: AppSidebarProps) {
+export function AppSidebar({ profile, onProfileUpdate, counts, isGuest, onExitGuest }: AppSidebarProps) {
   const { user, signOut } = useAuth();
   return (
     <Sidebar>
       <SidebarHeader className="p-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-lg font-bold">JS-Searcher</h1>
-            <p className="text-xs text-muted-foreground">
-              AI-powered SEEK job matcher
-            </p>
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="h-8 w-8 rounded-md bg-primary/10 text-primary flex items-center justify-center flex-shrink-0">
+              <Sparkles className="h-4 w-4" />
+            </div>
+            <div className="min-w-0">
+              <h1 className="text-base font-semibold tracking-tight truncate">Seek Smarter</h1>
+              <p className="text-xs text-muted-foreground truncate">
+                Private AI job-search cockpit
+              </p>
+            </div>
           </div>
           <ThemeToggle />
         </div>
+        {isGuest && (
+          <Badge variant="secondary" className="mt-3 w-fit text-[10px]">
+            Guest demo
+          </Badge>
+        )}
       </SidebarHeader>
 
       <SidebarContent>
