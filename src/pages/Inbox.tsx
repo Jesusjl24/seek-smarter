@@ -156,12 +156,28 @@ const Inbox = () => {
 
       setScoringJobId(jobId);
       try {
-        const { data, error } = await supabase.functions.invoke("score-job", {
-          body: { job, profile },
-        });
-
-        if (error) throw error;
-        if (data.error) throw new Error(data.error);
+        let data: {
+          match_score: number;
+          skill_match_percentage: number | null;
+          recommendation: string;
+          reasoning: string | null;
+          pros: string[];
+          cons: string[];
+          gaps: string[];
+          strategic_advice: string | null;
+          agent?: string;
+          agent_version?: string;
+        };
+        if (isGuest()) {
+          data = await guestScoreJob(job) as typeof data;
+        } else {
+          const res = await supabase.functions.invoke("score-job", {
+            body: { job, profile },
+          });
+          if (res.error) throw res.error;
+          if (res.data?.error) throw new Error(res.data.error);
+          data = res.data;
+        }
 
         await saveJobMatch({
           job_id: jobId,
