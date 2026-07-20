@@ -1,5 +1,22 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { Job, JobWithMatch, JobMatch, ScrapedJob, PipelineStatus, PipelineCounts, JobArtifact, TailoredResume, CoverLetter, ResumeProfile, RubricScores } from "@/types/job";
+import {
+  isGuest,
+  guestFetchJobsByStatus,
+  guestFetchAllJobs,
+  guestCounts,
+  guestUpdateStatus,
+  guestBulkUpdateStatus,
+  guestUpdateNotes,
+  guestDelete,
+  guestDeleteMany,
+  guestUpsertScraped,
+  guestSaveMatch,
+  guestFetchArtifacts,
+  guestSaveArtifact,
+  guestTailorResume,
+  guestCoverLetter,
+} from "@/lib/guest";
 
 /**
  * Converts relative date strings like "3d ago", "1d ago", "Today", "Yesterday"
