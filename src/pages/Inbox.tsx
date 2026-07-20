@@ -265,13 +265,26 @@ const Inbox = () => {
     for (const job of unscoredJobs) {
       try {
         setScoringJobId(job.id);
-        const { data, error } = await supabase.functions.invoke("score-job", {
-          body: { job, profile },
-        });
-
-        if (error || data.error) {
-          failed++;
-          continue;
+        let data: {
+          match_score: number;
+          skill_match_percentage: number | null;
+          recommendation: string;
+          reasoning: string | null;
+          pros: string[];
+          cons: string[];
+          gaps: string[];
+          strategic_advice: string | null;
+          agent?: string;
+          agent_version?: string;
+        };
+        if (isGuest()) {
+          data = await guestScoreJob(job) as typeof data;
+        } else {
+          const res = await supabase.functions.invoke("score-job", {
+            body: { job, profile },
+          });
+          if (res.error || res.data?.error) { failed++; continue; }
+          data = res.data;
         }
 
         await saveJobMatch({
