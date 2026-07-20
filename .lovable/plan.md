@@ -1,53 +1,113 @@
-## Review findings
 
-I checked the running app, console logs, database policies, and client code. One blocker and a few smaller issues.
+# Seek Smarter — Friend-testable MVP polish
 
-### 🔴 Blocker — app can't read any data
-- Console: `permission denied for table jobs` on the Inbox page.
-- Cause: last turn's security fix restricted `jobs`, `job_matches`, `job_artifacts`, and `resume_profile` to authenticated users, but the app has no login flow. Every client call goes as anonymous and is rejected.
-- Impact: Inbox, Shortlist, Not a Fit, AI Lab, Resume upload, and job scraping all fail.
+Additive, in-place changes on the existing Vite + React + TS + Supabase + shadcn app. No rebuild. Preserve routes, edge functions, auth, and the multi-agent pipeline.
 
-### 🟡 Other issues spotted
-- Storage bucket `resumes` is public and its `storage.objects` policies allow anyone to list, upload, update, and delete files. Resumes contain PII.
-- `resume_profile` has no `user_id` column, so even after adding auth, all users would share one profile row.
-- `jobs` / `job_matches` / `job_artifacts` also have no per-user ownership column, so multi-user support would leak data across accounts.
-- Edge functions (`scrape-seek`, `score-job`, `tailor-resume`, `generate-cover-letter`, `parse-resume`, `proxy-storage`) run with `verify_jwt = false` and don't validate the caller — anyone with the URL can invoke them and burn AI credits.
-- No `<title>` / meta description overrides — `index.html` still uses defaults.
+## 1. Rebrand: JS-Searcher → Seek Smarter
 
-## Proposed plan
+Global find/replace of user-facing strings only (leave repo/package names alone):
+- `index.html` title/description/OG tags → "Seek Smarter — Turn SEEK listings into a ranked application plan"
+- `src/pages/Auth.tsx` `CardTitle`
+- `src/components/layout/AppSidebar.tsx` header
+- Any remaining "JS-Searcher" copy
 
-### Step 1 — Add authentication (unblocks the app)
-- Enable email/password + Google sign-in on Lovable Cloud.
-- Add `/auth` page (sign in / sign up) and an `AuthProvider` that hydrates the Supabase session.
-- Wrap `MainLayout` routes in a `RequireAuth` guard that redirects unauthenticated users to `/auth`.
-- Add a "Sign out" control in the sidebar.
+## 2. Routing model
 
-### Step 2 — Scope data per user
-- Migration: add `user_id uuid` to `jobs`, `job_matches`, `job_artifacts`, `resume_profile` (default `auth.uid()` on insert via trigger, backfill existing rows to the first signed-up user or NULL, then set NOT NULL).
-- Replace the current `USING (true)` authenticated policies with `USING (auth.uid() = user_id)` on all four tables.
-- Update client inserts to include `user_id: (await supabase.auth.getUser()).data.user?.id`.
+Keep `BrowserRouter` in `src/App.tsx`. Introduce a lightweight `GuestModeProvider` (localStorage flag `seek-smarter:guest = "1"`).
 
-### Step 3 — Lock down storage
-- Make the `resumes` bucket private.
-- Replace the four "anyone" policies with per-user policies keyed on `auth.uid()::text = (storage.foldername(name))[1]`, and store resumes under `<user_id>/filename.pdf`.
-- Update `uploadResumeFile` to prefix the path with the user id, and `PDFViewer` to fetch through signed URLs (or keep the existing `proxy-storage` function but have it use a service-role client to fetch).
+New route map:
+```text
+/landing           public marketing page
+/auth              public auth (unchanged surface, polished)
+/guest             enables guest mode, redirects to /
+/                  Inbox — allowed when session OR guest
+/shortlist         same guard
+/not-a-fit         same guard
+/ai-lab            same guard
+```
 
-### Step 4 — Protect edge functions
-- Flip `verify_jwt = true` in `supabase/config.toml` for `scrape-seek`, `score-job`, `tailor-resume`, `generate-cover-letter`, `parse-resume`.
-- Add an in-code `getClaims(token)` check in each so unauthenticated callers get 401.
-- Keep `proxy-storage` with `verify_jwt = true` and only serve files that belong to the caller.
+Update `RequireAuth` → `RequireAccess`: allow through if `session || guestMode`. Unauthenticated + non-guest hitting `/` redirects to `/landing` (not `/auth`).
 
-### Step 5 — SEO / metadata polish
-- Set real `<title>`, `<meta name="description">`, and matching OG/Twitter tags in `index.html`.
+## 3. Landing page (`src/pages/Landing.tsx`)
 
-## Technical details
+Mobile-first, dark/light, no fake logos/metrics/testimonials. Sections:
 
-- `AuthProvider` uses `supabase.auth.onAuthStateChange` + `getSession` and exposes `{ session, user, loading }` via context. `RequireAuth` renders a spinner while `loading`, redirects to `/auth` when `session` is null, and renders children otherwise.
-- The Google provider requires a workspace-level OAuth config; I'll wire the client code and note that the Google button will error until credentials are added (email/password works immediately).
-- Backfilling `user_id` on existing rows: for a single-user setup we can assign every existing row to the first user that signs in via a one-off SQL update, then enforce NOT NULL. If you'd rather wipe existing rows, say so and I'll do that instead.
-- Edge functions will read the JWT from the `Authorization` header, call `supabase.auth.getClaims(token)`, and reject on failure. Client calls via `supabase.functions.invoke` already forward the session, so no client changes needed there.
+1. **Hero** — headline "Stop guessing which jobs are worth applying to.", subhead about scoring SEEK listings against your resume. CTAs: **Try guest demo** (`/guest`), **Sign in** (`/auth`). Right-side (or below on mobile) a real, static mini "cockpit" preview built from actual `JobCard`/score-badge components showing Resume → Search → Score → Shortlist → Tailor as a horizontal stepper.
+2. **Problem** — 4 short bullets (too many listings, unclear fit, tailoring is slow, spreadsheet mess).
+3. **Product loop** — 5 numbered steps using real product icons: Upload resume → Search SEEK → Score fit → Shortlist/reject → Generate tailored materials.
+4. **Privacy / honesty** — only the approved copy ("Designed as a private job-search workspace.", "Guest demo uses sample data.", "For production, keep resumes in authenticated private storage."). No "bank-level" claims.
+5. **Demo CTA** — repeat "Try guest demo" + secondary sign-in.
 
-## Open questions
-1. **Auth methods** — email/password only, or also Google (needs OAuth credentials in workspace settings)?
-2. **Existing data** — assign every existing job/resume row to the first user who signs in, or wipe and start clean?
-3. **Multi-user or single-user?** — if this is only ever for you, we can skip Step 2's `user_id` scoping and keep the simpler "any authenticated user sees everything" policy that's live now.
+Visual: Tailwind, semantic tokens (`bg-background`, `text-foreground`, `border`, `primary`). Use one subtle radial gradient behind hero, a glass card for the preview, generous spacing. Reuse shadcn `Button`, `Card`, `Badge`. No new heavy deps.
+
+## 4. Guest mode
+
+`src/lib/guest.ts` (new): `isGuest()`, `enableGuest()`, `exitGuest()`, plus `guestSeed` (jobs, resume profile, scores, artifacts — sample but realistic AU roles).
+
+`src/pages/GuestEntry.tsx` (new): calls `enableGuest()` and `navigate("/", { replace: true })`.
+
+Data layer switch: `src/lib/api/jobs.ts` and `src/lib/api/resume.ts` get a top-of-file `if (isGuest()) return guest…` branch for read/write functions used by pipeline pages. Writes in guest mode mutate an in-memory store (module-scoped `let` seeded on first read) so Score/Shortlist/Not-a-Fit actions feel real without hitting Supabase.
+
+Edge function calls (`score-job`, `tailor-resume`, `generate-cover-letter`, `scrape-seek`) get a guard in the pages: if `isGuest()`, return a deterministic mocked response from `guestSeed` (predefined scores + short pros/cons/advice text) with a 400ms delay for realism.
+
+UI:
+- `MainLayout`: top banner "Guest demo — sample data, no live APIs." with **Exit demo** button (calls `exitGuest()` → `/landing`).
+- Sidebar shows a small **Guest Demo** badge next to the brand when active.
+- Auth page gains "Continue as Guest Demo" secondary button.
+
+## 5. App shell polish
+
+`AppSidebar.tsx`:
+- Brand row: logo mark (simple SVG, no new asset generation) + "Seek Smarter" wordmark, optional guest badge.
+- Nav items with icons already present; add subtle active-state pill (`bg-primary/10 text-primary`).
+- Footer: user email (or "Guest") + theme toggle + sign out / exit demo.
+- Ensure `collapsible="icon"` and keep `SidebarTrigger` in header for mobile.
+
+`MainLayout.tsx`: sticky top bar with `SidebarTrigger` + page title slot + guest banner. Ensure root `w-full min-h-screen` and no horizontal overflow at 320px.
+
+## 6. Inbox polish (`src/pages/Inbox.tsx` + `JobCard.tsx`)
+
+- Empty state: 5-step checklist card (Upload resume / Search SEEK / Score jobs / Shortlist / Generate tailored material) with each item's completion inferred from state.
+- Search bar row: keep, tighten spacing, make filter panel collapsible on mobile (`Sheet`).
+- `JobCard`: 2-line title clamp, company + location + work type chips, salary if present, score badge (colored by band), recommendation label, one-line reasoning preview. Actions: Score / Shortlist / Not a Fit / Details / View on SEEK. On mobile, actions collapse into a dropdown but each option has a text label (no ambiguous icon-only).
+
+Score explanation: `JobDetailModal` already renders pros/cons/gaps/advice — verify tabs and add "Tailor resume" / "Generate cover letter" CTAs when score ≥ 60.
+
+## 7. Shortlist / Not a Fit responsive
+
+`JobsTable.tsx`: render existing table at `md:` and above; below `md`, render a card list (reuse a compact variant of `JobCard` with stage selector, notes preview, artifact indicators, actions menu). Not a Fit gets "Move to Inbox / Shortlist" quick actions.
+
+## 8. AI Lab polish
+
+`src/pages/AILab.tsx`: cleaner stat cards (score distribution histogram using existing data, agent-version table, empty state when no scored jobs). No new chart dep — use CSS bars.
+
+## 9. Lint fixes
+
+- `src/components/jobs/JobsTable.tsx`: `let filtered` → `const`.
+- `src/components/ui/command.tsx`, `textarea.tsx`: empty interface → `type X = ComponentProps<...>`.
+- `tailwind.config.ts`: `require("tailwindcss-animate")` → ESM `import animate from "tailwindcss-animate"`.
+- `supabase/functions/scrape-seek/index.ts`: remove unnecessary regex escape.
+- Narrow one or two `any` to minimal shapes where trivial; do not chase every one.
+
+## 10. Security follow-up (non-blocking)
+
+Add `SECURITY_TODO.md` listing: enable `verify_jwt = true` on functions post-demo, add per-user `user_id` scoping columns, lock storage bucket to `resumes/<uid>/`. No config changes this pass to avoid breaking demo.
+
+## Files touched
+
+New: `src/pages/Landing.tsx`, `src/pages/GuestEntry.tsx`, `src/lib/guest.ts`, `SECURITY_TODO.md`.
+
+Modified: `src/App.tsx`, `src/components/auth/RequireAuth.tsx` (→ RequireAccess), `src/pages/Auth.tsx`, `src/pages/Inbox.tsx`, `src/pages/Shortlist.tsx`, `src/pages/NotAFit.tsx`, `src/pages/AILab.tsx`, `src/components/layout/MainLayout.tsx`, `src/components/layout/AppSidebar.tsx`, `src/components/jobs/JobCard.tsx`, `src/components/jobs/JobsTable.tsx`, `src/components/jobs/JobDetailModal.tsx`, `src/lib/api/jobs.ts`, `src/lib/api/resume.ts`, `index.html`, `tailwind.config.ts`, `src/components/ui/command.tsx`, `src/components/ui/textarea.tsx`, `supabase/functions/scrape-seek/index.ts`.
+
+## Verification
+
+- `bun run build` and `tsgo --noEmit` must pass.
+- `bunx vitest run` must pass.
+- `bun run lint` — report remaining pre-existing warnings.
+- Playwright smoke: `/landing` → click "Try guest demo" → `/` shows seeded jobs → Score updates card → Shortlist shows entry → AI Lab renders. Capture screenshots at 375 and 1280 px into `/tmp/browser/screenshots/`.
+
+## Out of scope this pass
+
+- Real per-user data isolation, JWT enforcement on edge functions, storage bucket lockdown (documented in `SECURITY_TODO.md`).
+- Generated brand imagery (using typographic wordmark + subtle gradient only).
+- Persisting guest actions across reloads (in-memory only, acceptable for friend demo).

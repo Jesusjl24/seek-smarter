@@ -1,5 +1,22 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { Job, JobWithMatch, JobMatch, ScrapedJob, PipelineStatus, PipelineCounts, JobArtifact, TailoredResume, CoverLetter, ResumeProfile, RubricScores } from "@/types/job";
+import {
+  isGuest,
+  guestFetchJobsByStatus,
+  guestFetchAllJobs,
+  guestCounts,
+  guestUpdateStatus,
+  guestBulkUpdateStatus,
+  guestUpdateNotes,
+  guestDelete,
+  guestDeleteMany,
+  guestUpsertScraped,
+  guestSaveMatch,
+  guestFetchArtifacts,
+  guestSaveArtifact,
+  guestTailorResume,
+  guestCoverLetter,
+} from "@/lib/guest";
 
 /**
  * Converts relative date strings like "3d ago", "1d ago", "Today", "Yesterday"
@@ -56,6 +73,7 @@ function parseRelativeDate(dateStr: string | undefined | null): string | null {
 }
 
 export async function fetchJobs(): Promise<JobWithMatch[]> {
+  if (isGuest()) return guestFetchAllJobs();
   const { data: jobs, error: jobsError } = await supabase
     .from("jobs")
     .select("*")
@@ -86,6 +104,7 @@ export async function fetchJobs(): Promise<JobWithMatch[]> {
 export async function fetchJobsByStatus(
   status: PipelineStatus | PipelineStatus[]
 ): Promise<JobWithMatch[]> {
+  if (isGuest()) return guestFetchJobsByStatus(status);
   const statuses = Array.isArray(status) ? status : [status];
   
   const { data: jobs, error: jobsError } = await supabase
@@ -117,6 +136,7 @@ export async function fetchJobsByStatus(
 }
 
 export async function fetchPipelineCounts(): Promise<PipelineCounts> {
+  if (isGuest()) return guestCounts();
   const { data, error } = await supabase
     .from("jobs")
     .select("pipeline_status");
@@ -148,6 +168,7 @@ export async function fetchPipelineCounts(): Promise<PipelineCounts> {
 export async function upsertJobs(
   scrapedJobs: ScrapedJob[]
 ): Promise<{ newCount: number; existingCount: number }> {
+  if (isGuest()) return guestUpsertScraped(scrapedJobs);
   let newCount = 0;
   let existingCount = 0;
 
@@ -209,11 +230,13 @@ export async function upsertJobs(
 }
 
 export async function deleteJob(jobId: string): Promise<void> {
+  if (isGuest()) { guestDelete(jobId); return; }
   const { error } = await supabase.from("jobs").delete().eq("id", jobId);
   if (error) throw error;
 }
 
 export async function deleteJobs(jobIds: string[]): Promise<void> {
+  if (isGuest()) { guestDeleteMany(jobIds); return; }
   const { error } = await supabase.from("jobs").delete().in("id", jobIds);
   if (error) throw error;
 }
@@ -222,6 +245,7 @@ export async function updateJobStatus(
   jobId: string,
   status: PipelineStatus
 ): Promise<void> {
+  if (isGuest()) { guestUpdateStatus(jobId, status); return; }
   const { error } = await supabase
     .from("jobs")
     .update({ pipeline_status: status })
@@ -233,6 +257,7 @@ export async function bulkUpdateJobStatus(
   jobIds: string[],
   status: PipelineStatus
 ): Promise<void> {
+  if (isGuest()) { guestBulkUpdateStatus(jobIds, status); return; }
   const { error } = await supabase
     .from("jobs")
     .update({ pipeline_status: status })
@@ -244,6 +269,7 @@ export async function updateJobNotes(
   jobId: string,
   notes: string
 ): Promise<void> {
+  if (isGuest()) { guestUpdateNotes(jobId, notes); return; }
   const { error } = await supabase
     .from("jobs")
     .update({ notes })
@@ -252,7 +278,7 @@ export async function updateJobNotes(
 }
 
 export async function saveJobMatch(match: Omit<JobMatch, "id" | "scored_at">): Promise<JobMatch> {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  if (isGuest()) return guestSaveMatch(match);
   const { scores, ...matchWithoutScores } = match;
   const insertData: Record<string, unknown> = {
     ...matchWithoutScores,
@@ -274,6 +300,7 @@ export async function saveJobMatch(match: Omit<JobMatch, "id" | "scored_at">): P
 
 // Fetch artifacts for a specific job
 export async function fetchJobArtifacts(jobId: string): Promise<JobArtifact[]> {
+  if (isGuest()) return guestFetchArtifacts(jobId);
   const { data, error } = await supabase
     .from("job_artifacts")
     .select("*")
@@ -288,6 +315,7 @@ export async function fetchJobArtifacts(jobId: string): Promise<JobArtifact[]> {
 export async function saveJobArtifact(
   artifact: Omit<JobArtifact, "id" | "created_at">
 ): Promise<JobArtifact> {
+  if (isGuest()) return guestSaveArtifact(artifact);
   const insertData: Record<string, unknown> = {
     job_id: artifact.job_id,
     artifact_type: artifact.artifact_type,
@@ -312,6 +340,7 @@ export async function generateTailoredResume(
   profile: ResumeProfile,
   matchScore: number
 ): Promise<TailoredResume> {
+  if (isGuest()) return guestTailorResume(job as JobWithMatch);
   const { data, error } = await supabase.functions.invoke("tailor-resume", {
     body: {
       job: {
@@ -338,6 +367,7 @@ export async function generateCoverLetter(
   matchScore: number,
   tailoredHighlights?: string[]
 ): Promise<CoverLetter> {
+  if (isGuest()) return guestCoverLetter(job as JobWithMatch);
   const { data, error } = await supabase.functions.invoke("generate-cover-letter", {
     body: {
       job: {

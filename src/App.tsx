@@ -12,6 +12,8 @@ import Shortlist from "./pages/Shortlist";
 import NotAFit from "./pages/NotAFit";
 import AILab from "./pages/AILab";
 import AuthPage from "./pages/Auth";
+import Landing from "./pages/Landing";
+import GuestEntry from "./pages/GuestEntry";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -25,6 +27,8 @@ const App = () => (
         <BrowserRouter>
           <AuthProvider>
             <Routes>
+              <Route path="/landing" element={<Landing />} />
+              <Route path="/guest" element={<GuestEntry />} />
               <Route path="/auth" element={<AuthPage />} />
               <Route
                 element={

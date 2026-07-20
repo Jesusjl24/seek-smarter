@@ -541,7 +541,7 @@ interface ParseResult {
 }
 
 async function parseSeekJobs(
-  data: any, 
+  data: unknown, 
   markdown: string, 
   links: string[], 
   limit: number,
@@ -595,7 +595,7 @@ async function parseSeekJobs(
     }
     
     // Pattern: [Title](/job/ID) - markdown links
-    const linkMatch = line.match(/\[([^\]]+)\]\((?:https:\/\/www\.seek\.com\.au)?\/job\/(\d+)[^\)]*\)/);
+    const linkMatch = line.match(/\[([^\]]+)\]\((?:https:\/\/www\.seek\.com\.au)?\/job\/(\d+)[^)]*\)/);
     if (linkMatch) {
       // Save previous job if valid
       if (currentJob.seek_job_id && currentJob.title) {

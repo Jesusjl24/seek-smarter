@@ -111,7 +111,7 @@ export function JobsTable({
 
   // Filter and sort jobs
   const filteredJobs = useMemo(() => {
-    let filtered = jobs.filter(
+    const filtered = jobs.filter(
       (job) =>
         job.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
         job.company.toLowerCase().includes(searchQuery.toLowerCase())

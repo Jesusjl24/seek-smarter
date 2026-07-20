@@ -1,10 +1,13 @@
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
+import { isGuest } from "@/lib/guest";
 import { Loader2 } from "lucide-react";
 
 export function RequireAuth({ children }: { children: React.ReactNode }) {
   const { session, loading } = useAuth();
   const location = useLocation();
+
+  if (isGuest()) return <>{children}</>;
 
   if (loading) {
     return (
@@ -15,7 +18,7 @@ export function RequireAuth({ children }: { children: React.ReactNode }) {
   }
 
   if (!session) {
-    return <Navigate to="/auth" replace state={{ from: location.pathname }} />;
+    return <Navigate to="/landing" replace state={{ from: location.pathname }} />;
   }
 
   return <>{children}</>;

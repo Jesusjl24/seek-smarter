@@ -59,8 +59,8 @@ export default function AuthPage() {
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md">
         <CardHeader>
-          <CardTitle>JS-Searcher</CardTitle>
-          <CardDescription>Sign in to access your job pipeline</CardDescription>
+          <CardTitle>Seek Smarter</CardTitle>
+          <CardDescription>Private AI cockpit for your SEEK job search.</CardDescription>
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="signin">
@@ -110,6 +110,16 @@ export default function AuthPage() {
           <Button variant="outline" className="w-full" onClick={handleGoogle} disabled={busy}>
             Continue with Google
           </Button>
+          <Button
+            variant="ghost"
+            className="w-full mt-2"
+            onClick={() => navigate("/guest")}
+          >
+            Continue as Guest Demo
+          </Button>
+          <p className="mt-4 text-xs text-muted-foreground text-center">
+            Your resume and job pipeline are private to your account.
+          </p>
         </CardContent>
       </Card>
     </div>

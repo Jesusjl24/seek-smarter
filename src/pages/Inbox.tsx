@@ -7,6 +7,7 @@ import { ActionButtons } from "@/components/sidebar/ActionButtons";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { isGuest, guestScoreJob } from "@/lib/guest";
 import {
   fetchJobsByStatus,
   upsertJobs,
@@ -73,6 +74,15 @@ const Inbox = () => {
     }
 
     setIsSearching(true);
+    if (isGuest()) {
+      await new Promise((r) => setTimeout(r, 600));
+      setIsSearching(false);
+      toast({
+        title: "Guest demo",
+        description: "Live SEEK scraping is disabled in guest mode. Sample jobs are already loaded.",
+      });
+      return;
+    }
     try {
       const { data, error } = await supabase.functions.invoke("scrape-seek", {
         body: {
@@ -155,12 +165,28 @@ const Inbox = () => {
 
       setScoringJobId(jobId);
       try {
-        const { data, error } = await supabase.functions.invoke("score-job", {
-          body: { job, profile },
-        });
-
-        if (error) throw error;
-        if (data.error) throw new Error(data.error);
+        let data: {
+          match_score: number;
+          skill_match_percentage: number | null;
+          recommendation: string;
+          reasoning: string | null;
+          pros: string[];
+          cons: string[];
+          gaps: string[];
+          strategic_advice: string | null;
+          agent?: string;
+          agent_version?: string;
+        };
+        if (isGuest()) {
+          data = await guestScoreJob(job) as typeof data;
+        } else {
+          const res = await supabase.functions.invoke("score-job", {
+            body: { job, profile },
+          });
+          if (res.error) throw res.error;
+          if (res.data?.error) throw new Error(res.data.error);
+          data = res.data;
+        }
 
         await saveJobMatch({
           job_id: jobId,
@@ -248,13 +274,26 @@ const Inbox = () => {
     for (const job of unscoredJobs) {
       try {
         setScoringJobId(job.id);
-        const { data, error } = await supabase.functions.invoke("score-job", {
-          body: { job, profile },
-        });
-
-        if (error || data.error) {
-          failed++;
-          continue;
+        let data: {
+          match_score: number;
+          skill_match_percentage: number | null;
+          recommendation: string;
+          reasoning: string | null;
+          pros: string[];
+          cons: string[];
+          gaps: string[];
+          strategic_advice: string | null;
+          agent?: string;
+          agent_version?: string;
+        };
+        if (isGuest()) {
+          data = await guestScoreJob(job) as typeof data;
+        } else {
+          const res = await supabase.functions.invoke("score-job", {
+            body: { job, profile },
+          });
+          if (res.error || res.data?.error) { failed++; continue; }
+          data = res.data;
         }
 
         await saveJobMatch({
