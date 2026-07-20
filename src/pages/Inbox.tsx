@@ -7,6 +7,7 @@ import { ActionButtons } from "@/components/sidebar/ActionButtons";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { isGuest, guestScoreJob } from "@/lib/guest";
 import {
   fetchJobsByStatus,
   upsertJobs,
