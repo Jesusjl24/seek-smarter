@@ -1,7 +1,9 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { ResumeProfile } from "@/types/job";
+import { isGuest, guestFetchProfile, guestDeleteProfile } from "@/lib/guest";
 
 export async function fetchResumeProfile(): Promise<ResumeProfile | null> {
+  if (isGuest()) return guestFetchProfile();
   const { data, error } = await supabase
     .from("resume_profile")
     .select("*")
@@ -84,7 +86,7 @@ export async function saveResumeProfile(
 }
 
 export async function deleteResumeProfile(profileId: string): Promise<void> {
-  // First get the profile to find the file path
+  if (isGuest()) { guestDeleteProfile(); return; }
   const { data: profile, error: fetchError } = await supabase
     .from("resume_profile")
     .select("file_url")
