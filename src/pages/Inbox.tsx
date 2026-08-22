@@ -1,17 +1,20 @@
-import { useState, useEffect, useCallback } from "react";
-import { SearchBar } from "@/components/search/SearchBar";
-import { SearchFiltersPanel } from "@/components/search/SearchFilters";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { ArrowRight, Download, Sparkles } from "lucide-react";
+import { SearchSourceBar } from "@/components/search/SearchSourceBar";
 import { SearchProgress } from "@/components/search/SearchProgress";
-import { JobList } from "@/components/jobs/JobList";
-import { ActionButtons } from "@/components/sidebar/ActionButtons";
-import { Separator } from "@/components/ui/separator";
+import { RecommendationCard } from "@/components/jobs/RecommendationCard";
+import { ReviewQueue } from "@/components/jobs/ReviewQueue";
+import { PolicyBar } from "@/components/policy/PolicyBar";
+import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { isGuest, guestScoreJob } from "@/lib/guest";
 import { fetchPreferences } from "@/lib/api/preferences";
+import { classifyScore } from "@/lib/policy";
 import { EMPTY_PREFERENCES, type CandidatePreferences } from "@/types/preferences";
 import {
   fetchJobsByStatus,
+  fetchArtifactsForJobs,
   upsertJobs,
   deleteJob,
   deleteJobs,
@@ -21,6 +24,7 @@ import {
 } from "@/lib/api/jobs";
 import { useLayoutContext } from "@/components/layout/MainLayout";
 import type { JobWithMatch, SearchFilters, PipelineStatus } from "@/types/job";
+
 
 const defaultFilters: SearchFilters = {
   keywords: "",
