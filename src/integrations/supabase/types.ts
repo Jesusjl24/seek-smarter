@@ -14,6 +14,393 @@ export type Database = {
   }
   public: {
     Tables: {
+      application_events: {
+        Row: {
+          created_at: string
+          event_at: string
+          event_type: string
+          external_reference: string | null
+          id: string
+          job_id: string
+          notes: string | null
+          source: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          event_at?: string
+          event_type: string
+          external_reference?: string | null
+          id?: string
+          job_id: string
+          notes?: string | null
+          source?: string
+          user_id?: string
+        }
+        Update: {
+          created_at?: string
+          event_at?: string
+          event_type?: string
+          external_reference?: string | null
+          id?: string
+          job_id?: string
+          notes?: string | null
+          source?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "application_events_job_id_user_id_fkey"
+            columns: ["job_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "jobs"
+            referencedColumns: ["id", "user_id"]
+          },
+        ]
+      }
+      application_packages: {
+        Row: {
+          approved_at: string | null
+          checklist: Json
+          cover_letter_document_revision_id: string | null
+          created_at: string
+          id: string
+          job_id: string
+          package_hash: string
+          resume_document_revision_id: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          approved_at?: string | null
+          checklist?: Json
+          cover_letter_document_revision_id?: string | null
+          created_at?: string
+          id?: string
+          job_id: string
+          package_hash: string
+          resume_document_revision_id?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Update: {
+          approved_at?: string | null
+          checklist?: Json
+          cover_letter_document_revision_id?: string | null
+          created_at?: string
+          id?: string
+          job_id?: string
+          package_hash?: string
+          resume_document_revision_id?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "application_packages_cover_letter_document_revision_id_use_fkey"
+            columns: ["cover_letter_document_revision_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "document_revisions"
+            referencedColumns: ["id", "user_id"]
+          },
+          {
+            foreignKeyName: "application_packages_job_id_user_id_fkey"
+            columns: ["job_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "jobs"
+            referencedColumns: ["id", "user_id"]
+          },
+          {
+            foreignKeyName: "application_packages_resume_document_revision_id_user_id_fkey"
+            columns: ["resume_document_revision_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "document_revisions"
+            referencedColumns: ["id", "user_id"]
+          },
+        ]
+      }
+      approval_decisions: {
+        Row: {
+          approved_hash: string | null
+          comment: string | null
+          created_at: string
+          decided_at: string
+          decision: string
+          entity_id: string
+          entity_type: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          approved_hash?: string | null
+          comment?: string | null
+          created_at?: string
+          decided_at?: string
+          decision: string
+          entity_id: string
+          entity_type: string
+          id?: string
+          user_id?: string
+        }
+        Update: {
+          approved_hash?: string | null
+          comment?: string | null
+          created_at?: string
+          decided_at?: string
+          decision?: string
+          entity_id?: string
+          entity_type?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      assistant_recommendations: {
+        Row: {
+          agent_version: string
+          concerns: string[]
+          created_at: string
+          evidence_gaps: string[]
+          hard_blockers: string[]
+          id: string
+          job_id: string
+          proposed_action: string | null
+          reasoning: string | null
+          recommendation_band: string
+          score: number
+          status: string
+          strengths: string[]
+          task_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          agent_version?: string
+          concerns?: string[]
+          created_at?: string
+          evidence_gaps?: string[]
+          hard_blockers?: string[]
+          id?: string
+          job_id: string
+          proposed_action?: string | null
+          reasoning?: string | null
+          recommendation_band: string
+          score: number
+          status?: string
+          strengths?: string[]
+          task_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Update: {
+          agent_version?: string
+          concerns?: string[]
+          created_at?: string
+          evidence_gaps?: string[]
+          hard_blockers?: string[]
+          id?: string
+          job_id?: string
+          proposed_action?: string | null
+          reasoning?: string | null
+          recommendation_band?: string
+          score?: number
+          status?: string
+          strengths?: string[]
+          task_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "assistant_recommendations_job_id_user_id_fkey"
+            columns: ["job_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "jobs"
+            referencedColumns: ["id", "user_id"]
+          },
+          {
+            foreignKeyName: "assistant_recommendations_task_id_user_id_fkey"
+            columns: ["task_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "assistant_tasks"
+            referencedColumns: ["id", "user_id"]
+          },
+        ]
+      }
+      assistant_runs: {
+        Row: {
+          agent_version: string
+          completed_at: string | null
+          created_at: string
+          failure_message: string | null
+          id: string
+          jobs_assessed: number
+          jobs_found: number
+          model: string | null
+          questions_count: number
+          recommendations_count: number
+          started_at: string | null
+          status: string
+          user_id: string
+        }
+        Insert: {
+          agent_version?: string
+          completed_at?: string | null
+          created_at?: string
+          failure_message?: string | null
+          id?: string
+          jobs_assessed?: number
+          jobs_found?: number
+          model?: string | null
+          questions_count?: number
+          recommendations_count?: number
+          started_at?: string | null
+          status?: string
+          user_id?: string
+        }
+        Update: {
+          agent_version?: string
+          completed_at?: string | null
+          created_at?: string
+          failure_message?: string | null
+          id?: string
+          jobs_assessed?: number
+          jobs_found?: number
+          model?: string | null
+          questions_count?: number
+          recommendations_count?: number
+          started_at?: string | null
+          status?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      assistant_tasks: {
+        Row: {
+          attempt_count: number
+          created_at: string
+          id: string
+          idempotency_key: string
+          input_snapshot_hash: string | null
+          job_id: string | null
+          job_revision_id: string | null
+          last_error: string | null
+          lease_expires_at: string | null
+          lease_owner: string | null
+          preferences_version: number | null
+          resume_revision_id: string | null
+          run_id: string | null
+          status: string
+          task_type: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          attempt_count?: number
+          created_at?: string
+          id?: string
+          idempotency_key: string
+          input_snapshot_hash?: string | null
+          job_id?: string | null
+          job_revision_id?: string | null
+          last_error?: string | null
+          lease_expires_at?: string | null
+          lease_owner?: string | null
+          preferences_version?: number | null
+          resume_revision_id?: string | null
+          run_id?: string | null
+          status?: string
+          task_type: string
+          updated_at?: string
+          user_id?: string
+        }
+        Update: {
+          attempt_count?: number
+          created_at?: string
+          id?: string
+          idempotency_key?: string
+          input_snapshot_hash?: string | null
+          job_id?: string | null
+          job_revision_id?: string | null
+          last_error?: string | null
+          lease_expires_at?: string | null
+          lease_owner?: string | null
+          preferences_version?: number | null
+          resume_revision_id?: string | null
+          run_id?: string | null
+          status?: string
+          task_type?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "assistant_tasks_job_id_user_id_fkey"
+            columns: ["job_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "jobs"
+            referencedColumns: ["id", "user_id"]
+          },
+          {
+            foreignKeyName: "assistant_tasks_resume_revision_id_user_id_fkey"
+            columns: ["resume_revision_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "resume_revisions"
+            referencedColumns: ["id", "user_id"]
+          },
+          {
+            foreignKeyName: "assistant_tasks_run_id_user_id_fkey"
+            columns: ["run_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "assistant_runs"
+            referencedColumns: ["id", "user_id"]
+          },
+        ]
+      }
+      candidate_facts: {
+        Row: {
+          created_at: string
+          evidence_reference: string | null
+          fact_text: string
+          fact_type: string
+          id: string
+          resume_revision_id: string
+          user_id: string
+          verified: boolean
+        }
+        Insert: {
+          created_at?: string
+          evidence_reference?: string | null
+          fact_text: string
+          fact_type: string
+          id?: string
+          resume_revision_id: string
+          user_id?: string
+          verified?: boolean
+        }
+        Update: {
+          created_at?: string
+          evidence_reference?: string | null
+          fact_text?: string
+          fact_type?: string
+          id?: string
+          resume_revision_id?: string
+          user_id?: string
+          verified?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "candidate_facts_resume_revision_id_user_id_fkey"
+            columns: ["resume_revision_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "resume_revisions"
+            referencedColumns: ["id", "user_id"]
+          },
+        ]
+      }
       candidate_preferences: {
         Row: {
           career_direction: string | null
@@ -79,6 +466,76 @@ export type Database = {
           work_types?: string[]
         }
         Relationships: []
+      }
+      document_revisions: {
+        Row: {
+          approval_status: string
+          content: Json
+          content_hash: string
+          created_at: string
+          document_type: string
+          id: string
+          job_id: string | null
+          revision_number: number
+          source_resume_revision_id: string | null
+          storage_path: string | null
+          supersedes_revision_id: string | null
+          truth_check_status: string
+          user_id: string
+        }
+        Insert: {
+          approval_status?: string
+          content?: Json
+          content_hash: string
+          created_at?: string
+          document_type: string
+          id?: string
+          job_id?: string | null
+          revision_number: number
+          source_resume_revision_id?: string | null
+          storage_path?: string | null
+          supersedes_revision_id?: string | null
+          truth_check_status?: string
+          user_id?: string
+        }
+        Update: {
+          approval_status?: string
+          content?: Json
+          content_hash?: string
+          created_at?: string
+          document_type?: string
+          id?: string
+          job_id?: string | null
+          revision_number?: number
+          source_resume_revision_id?: string | null
+          storage_path?: string | null
+          supersedes_revision_id?: string | null
+          truth_check_status?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "document_revisions_job_id_user_id_fkey"
+            columns: ["job_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "jobs"
+            referencedColumns: ["id", "user_id"]
+          },
+          {
+            foreignKeyName: "document_revisions_source_resume_revision_id_user_id_fkey"
+            columns: ["source_resume_revision_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "resume_revisions"
+            referencedColumns: ["id", "user_id"]
+          },
+          {
+            foreignKeyName: "document_revisions_supersedes_revision_id_user_id_fkey"
+            columns: ["supersedes_revision_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "document_revisions"
+            referencedColumns: ["id", "user_id"]
+          },
+        ]
       }
       job_artifacts: {
         Row: {
@@ -337,12 +794,141 @@ export type Database = {
         }
         Relationships: []
       }
+      resume_revisions: {
+        Row: {
+          approved_at: string | null
+          content_hash: string
+          created_at: string
+          id: string
+          parser_version: string
+          raw_text: string
+          revision_number: number
+          source_document_id: string | null
+          structured_profile: Json
+          user_id: string
+        }
+        Insert: {
+          approved_at?: string | null
+          content_hash: string
+          created_at?: string
+          id?: string
+          parser_version?: string
+          raw_text: string
+          revision_number: number
+          source_document_id?: string | null
+          structured_profile?: Json
+          user_id?: string
+        }
+        Update: {
+          approved_at?: string | null
+          content_hash?: string
+          created_at?: string
+          id?: string
+          parser_version?: string
+          raw_text?: string
+          revision_number?: number
+          source_document_id?: string | null
+          structured_profile?: Json
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "resume_revisions_source_document_id_fkey"
+            columns: ["source_document_id"]
+            isOneToOne: false
+            referencedRelation: "resume_profile"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      search_profiles: {
+        Row: {
+          active: boolean
+          adjacent_titles: string[]
+          created_at: string
+          dealbreakers: string[]
+          employment_types: string[]
+          excluded_companies: string[]
+          id: string
+          industries: string[]
+          locations: string[]
+          name: string
+          salary_min: number | null
+          target_titles: string[]
+          updated_at: string
+          user_id: string
+          version: number
+          work_arrangements: string[]
+        }
+        Insert: {
+          active?: boolean
+          adjacent_titles?: string[]
+          created_at?: string
+          dealbreakers?: string[]
+          employment_types?: string[]
+          excluded_companies?: string[]
+          id?: string
+          industries?: string[]
+          locations?: string[]
+          name: string
+          salary_min?: number | null
+          target_titles?: string[]
+          updated_at?: string
+          user_id?: string
+          version?: number
+          work_arrangements?: string[]
+        }
+        Update: {
+          active?: boolean
+          adjacent_titles?: string[]
+          created_at?: string
+          dealbreakers?: string[]
+          employment_types?: string[]
+          excluded_companies?: string[]
+          id?: string
+          industries?: string[]
+          locations?: string[]
+          name?: string
+          salary_min?: number | null
+          target_titles?: string[]
+          updated_at?: string
+          user_id?: string
+          version?: number
+          work_arrangements?: string[]
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      record_approval_decision: {
+        Args: {
+          _comment?: string
+          _decision: string
+          _entity_id: string
+          _entity_type: string
+          _expected_hash?: string
+        }
+        Returns: {
+          approved_hash: string | null
+          comment: string | null
+          created_at: string
+          decided_at: string
+          decision: string
+          entity_id: string
+          entity_type: string
+          id: string
+          user_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "approval_decisions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
     }
     Enums: {
       [_ in never]: never
