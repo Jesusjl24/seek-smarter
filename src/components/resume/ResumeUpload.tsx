@@ -64,7 +64,7 @@ export function ResumeUpload({ profile, onProfileUpdate }: ResumeUploadProps) {
 
     try {
       // Step 1: Upload file to Supabase Storage
-      const { url: fileUrl } = await uploadResumeFile(file);
+      const { path: filePath } = await uploadResumeFile(file);
       
       // Step 2: Convert file to base64 for AI parsing
       const reader = new FileReader();
@@ -91,7 +91,7 @@ export function ResumeUpload({ profile, onProfileUpdate }: ResumeUploadProps) {
       // Step 4: Save parsed profile with file URL to database
       const savedProfile = await saveResumeProfile({
         ...data,
-        file_url: fileUrl,
+        file_path: filePath,
         file_name: file.name,
         file_type: file.type,
       });

@@ -58,7 +58,9 @@ export interface ResumeProfile {
   industries: string[];
   summary: string | null;
   updated_at: string;
-  file_url?: string | null;
+  user_id?: string;
+  /** Storage object path: <user_id>/<revision_id>/<safe_filename> (private bucket). */
+  file_path?: string | null;
   file_name?: string | null;
   file_type?: string | null;
 }

@@ -1,4 +1,11 @@
 import { supabase } from "@/integrations/supabase/client";
+
+/** Resolves the signed-in user id; inserts must always carry explicit ownership. */
+async function requireUserId(): Promise<string> {
+  const { data, error } = await supabase.auth.getUser();
+  if (error || !data.user) throw new Error("You must be signed in to do that.");
+  return data.user.id;
+}
 import type { Job, JobWithMatch, JobMatch, ScrapedJob, PipelineStatus, PipelineCounts, JobArtifact, TailoredResume, CoverLetter, ResumeProfile, RubricScores } from "@/types/job";
 import {
   isGuest,
@@ -169,6 +176,7 @@ export async function upsertJobs(
   scrapedJobs: ScrapedJob[]
 ): Promise<{ newCount: number; existingCount: number }> {
   if (isGuest()) return guestUpsertScraped(scrapedJobs);
+  const userId = await requireUserId();
   let newCount = 0;
   let existingCount = 0;
 
@@ -201,6 +209,7 @@ export async function upsertJobs(
         }
       } else {
         const { error: insertError } = await supabase.from("jobs").insert({
+          user_id: userId,
           seek_job_id: job.seek_job_id,
           title: job.title,
           company: job.company,
@@ -279,9 +288,11 @@ export async function updateJobNotes(
 
 export async function saveJobMatch(match: Omit<JobMatch, "id" | "scored_at">): Promise<JobMatch> {
   if (isGuest()) return guestSaveMatch(match);
+  const userId = await requireUserId();
   const { scores, ...matchWithoutScores } = match;
   const insertData: Record<string, unknown> = {
     ...matchWithoutScores,
+    user_id: userId,
     scores: scores ? scores : null,
   };
   
@@ -316,7 +327,9 @@ export async function saveJobArtifact(
   artifact: Omit<JobArtifact, "id" | "created_at">
 ): Promise<JobArtifact> {
   if (isGuest()) return guestSaveArtifact(artifact);
+  const userId = await requireUserId();
   const insertData: Record<string, unknown> = {
+    user_id: userId,
     job_id: artifact.job_id,
     artifact_type: artifact.artifact_type,
     content: artifact.content,
