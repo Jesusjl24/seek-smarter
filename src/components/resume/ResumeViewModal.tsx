@@ -14,7 +14,9 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
+import { useEffect, useState } from "react";
 import { Briefcase, GraduationCap, Award, Building2, Clock, FileText, Download } from "lucide-react";
+import { getResumeSignedUrl } from "@/lib/api/resume";
 import { PDFViewer } from "./PDFViewer";
 import type { ResumeProfile } from "@/types/job";
 
@@ -25,10 +27,28 @@ interface ResumeViewModalProps {
 }
 
 export function ResumeViewModal({ profile, open, onClose }: ResumeViewModalProps) {
+  const [signedUrl, setSignedUrl] = useState<string | null>(null);
+  const filePath = profile?.file_path ?? null;
+
+  // Signed URLs are short-lived, so they are minted when the modal opens.
+  useEffect(() => {
+    let cancelled = false;
+    setSignedUrl(null);
+    if (!open || !filePath) return;
+    getResumeSignedUrl({ file_path: filePath })
+      .then((url) => {
+        if (!cancelled) setSignedUrl(url);
+      })
+      .catch((error) => console.error("Failed to sign resume URL:", error));
+    return () => {
+      cancelled = true;
+    };
+  }, [open, filePath]);
+
   if (!profile) return null;
 
   const isPDF = profile.file_type === "application/pdf";
-  const hasFile = !!profile.file_url;
+  const hasFile = !!filePath && !!signedUrl;
 
   const getFileTypeLabel = () => {
     if (profile.file_type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") {
@@ -55,7 +75,7 @@ export function ResumeViewModal({ profile, open, onClose }: ResumeViewModalProps
           </div>
           {hasFile && (
             <Button variant="outline" size="sm" asChild className="shrink-0">
-              <a href={profile.file_url!} download={profile.file_name || "resume"}>
+              <a href={signedUrl!} download={profile.file_name || "resume"}>
                 <Download className="h-4 w-4 mr-2" />
                 Download
               </a>
@@ -68,7 +88,7 @@ export function ResumeViewModal({ profile, open, onClose }: ResumeViewModalProps
           {hasFile && (
             <div className="shrink-0">
               {isPDF ? (
-                <PDFViewer fileUrl={profile.file_url!} fileName={profile.file_name || undefined} />
+                <PDFViewer fileUrl={signedUrl!} fileName={profile.file_name || undefined} />
               ) : (
                 <div className="flex flex-col items-center justify-center gap-4 py-8 border rounded-lg bg-muted/50">
                   <FileText className="h-12 w-12 text-muted-foreground" />
@@ -79,7 +99,7 @@ export function ResumeViewModal({ profile, open, onClose }: ResumeViewModalProps
                     </p>
                   </div>
                   <Button asChild>
-                    <a href={profile.file_url!} download={profile.file_name || "resume"}>
+                    <a href={signedUrl!} download={profile.file_name || "resume"}>
                       <Download className="h-4 w-4 mr-2" />
                       Download {getFileTypeLabel()}
                     </a>

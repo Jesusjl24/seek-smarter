@@ -91,7 +91,7 @@ function seed(): GuestStore {
     updated_at: nowIso(),
     file_name: "demo_resume.pdf",
     file_type: "application/pdf",
-    file_url: null,
+    file_path: null,
   };
 
   const mk = (

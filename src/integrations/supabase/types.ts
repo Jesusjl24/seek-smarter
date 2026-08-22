@@ -88,6 +88,7 @@ export type Database = {
           created_at: string | null
           id: string
           job_id: string
+          user_id: string
           version: string
         }
         Insert: {
@@ -97,6 +98,7 @@ export type Database = {
           created_at?: string | null
           id?: string
           job_id: string
+          user_id?: string
           version: string
         }
         Update: {
@@ -106,15 +108,16 @@ export type Database = {
           created_at?: string | null
           id?: string
           job_id?: string
+          user_id?: string
           version?: string
         }
         Relationships: [
           {
-            foreignKeyName: "job_artifacts_job_id_fkey"
-            columns: ["job_id"]
+            foreignKeyName: "job_artifacts_job_owner_fkey"
+            columns: ["job_id", "user_id"]
             isOneToOne: false
             referencedRelation: "jobs"
-            referencedColumns: ["id"]
+            referencedColumns: ["id", "user_id"]
           },
         ]
       }
@@ -137,6 +140,7 @@ export type Database = {
           scores: Json | null
           skill_match_percentage: number | null
           strategic_advice: string | null
+          user_id: string
           veto_reasons: string[] | null
         }
         Insert: {
@@ -157,6 +161,7 @@ export type Database = {
           scores?: Json | null
           skill_match_percentage?: number | null
           strategic_advice?: string | null
+          user_id?: string
           veto_reasons?: string[] | null
         }
         Update: {
@@ -177,22 +182,23 @@ export type Database = {
           scores?: Json | null
           skill_match_percentage?: number | null
           strategic_advice?: string | null
+          user_id?: string
           veto_reasons?: string[] | null
         }
         Relationships: [
           {
-            foreignKeyName: "job_matches_job_id_fkey"
-            columns: ["job_id"]
+            foreignKeyName: "job_matches_job_owner_fkey"
+            columns: ["job_id", "user_id"]
             isOneToOne: false
             referencedRelation: "jobs"
-            referencedColumns: ["id"]
+            referencedColumns: ["id", "user_id"]
           },
           {
-            foreignKeyName: "job_matches_resume_profile_id_fkey"
-            columns: ["resume_profile_id"]
+            foreignKeyName: "job_matches_profile_owner_fkey"
+            columns: ["resume_profile_id", "user_id"]
             isOneToOne: false
             referencedRelation: "resume_profile"
-            referencedColumns: ["id"]
+            referencedColumns: ["id", "user_id"]
           },
         ]
       }
@@ -212,6 +218,7 @@ export type Database = {
           seek_job_id: string
           title: string
           updated_at: string | null
+          user_id: string
           work_arrangement: string | null
           work_type: string | null
         }
@@ -230,6 +237,7 @@ export type Database = {
           seek_job_id: string
           title: string
           updated_at?: string | null
+          user_id?: string
           work_arrangement?: string | null
           work_type?: string | null
         }
@@ -248,8 +256,30 @@ export type Database = {
           seek_job_id?: string
           title?: string
           updated_at?: string | null
+          user_id?: string
           work_arrangement?: string | null
           work_type?: string | null
+        }
+        Relationships: []
+      }
+      rate_limits: {
+        Row: {
+          endpoint: string
+          request_count: number
+          user_id: string
+          window_start: string
+        }
+        Insert: {
+          endpoint: string
+          request_count?: number
+          user_id: string
+          window_start: string
+        }
+        Update: {
+          endpoint?: string
+          request_count?: number
+          user_id?: string
+          window_start?: string
         }
         Relationships: []
       }
@@ -258,6 +288,7 @@ export type Database = {
           certifications: string[] | null
           education: string[] | null
           file_name: string | null
+          file_path: string | null
           file_type: string | null
           file_url: string | null
           id: string
@@ -268,12 +299,14 @@ export type Database = {
           skills_technical: string[] | null
           summary: string | null
           updated_at: string
+          user_id: string
           years_experience: number | null
         }
         Insert: {
           certifications?: string[] | null
           education?: string[] | null
           file_name?: string | null
+          file_path?: string | null
           file_type?: string | null
           file_url?: string | null
           id?: string
@@ -284,12 +317,14 @@ export type Database = {
           skills_technical?: string[] | null
           summary?: string | null
           updated_at?: string
+          user_id?: string
           years_experience?: number | null
         }
         Update: {
           certifications?: string[] | null
           education?: string[] | null
           file_name?: string | null
+          file_path?: string | null
           file_type?: string | null
           file_url?: string | null
           id?: string
@@ -300,6 +335,7 @@ export type Database = {
           skills_technical?: string[] | null
           summary?: string | null
           updated_at?: string
+          user_id?: string
           years_experience?: number | null
         }
         Relationships: []

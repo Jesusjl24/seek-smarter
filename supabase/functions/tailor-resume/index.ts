@@ -1,10 +1,9 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { requireUser, UnauthorizedError, loadPreferences } from "../_shared/auth.ts";
+import { corsFor, originRejected, preflight } from "../_shared/cors.ts";
+import { enforceRateLimit, readJsonBody, RateLimitError, PayloadTooLargeError } from "../_shared/ratelimit.ts";
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
-};
+let corsHeaders: Record<string, string> = {};
 
 interface ResumeProfile {
   skills_technical: string[];
@@ -30,18 +29,26 @@ const AGENT_NAME = 'resume_tailor';
 const AGENT_VERSION = '1.0';
 
 serve(async (req) => {
+  corsHeaders = corsFor(req);
+  if (originRejected(req)) {
+    return new Response(JSON.stringify({ error: 'Origin not allowed' }), {
+      status: 403,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
   if (req.method === 'OPTIONS') {
-    return new Response(null, { status: 204, headers: corsHeaders });
+    return preflight(req);
   }
 
   try {
     const user = await requireUser(req);
+    await enforceRateLimit(user.id, 'tailor-resume', 10, 60);
 
-    const { job, profile, match_score } = await req.json() as { 
-      job: Job; 
+    const { job, profile, match_score } = await readJsonBody<{
+      job: Job;
       profile: ResumeProfile;
       match_score: number;
-    };
+    }>(req, 512 * 1024);
 
     if (!job || !profile) {
       return new Response(
@@ -227,6 +234,12 @@ Provide 3-5 bullet rewrites and 1-3 gap mitigations. Be specific and actionable.
   } catch (error) {
     if (error instanceof UnauthorizedError) {
       return new Response(JSON.stringify({ error: error.message }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+    if (error instanceof RateLimitError) {
+      return new Response(JSON.stringify({ error: error.message }), { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+    if (error instanceof PayloadTooLargeError) {
+      return new Response(JSON.stringify({ error: error.message }), { status: 413, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
     console.error('Error tailoring resume:', error);
     const errorMessage = error instanceof Error ? error.message : 'Failed to tailor resume';

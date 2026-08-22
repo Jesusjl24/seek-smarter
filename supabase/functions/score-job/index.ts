@@ -2,11 +2,10 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { requireUser, loadPreferences, UnauthorizedError } from "../_shared/auth.ts";
 import { evaluateDealbreakers, type CandidatePreferences } from "../_shared/dealbreakers.ts";
 import { bandLabel, resolvePolicy } from "../_shared/policy.ts";
+import { corsFor, originRejected, preflight } from "../_shared/cors.ts";
+import { enforceRateLimit, readJsonBody, RateLimitError, PayloadTooLargeError } from "../_shared/ratelimit.ts";
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
-};
+let corsHeaders: Record<string, string> = {};
 
 interface ResumeProfile {
   skills_technical: string[];
@@ -43,14 +42,25 @@ const list = (arr?: string[] | null) =>
   arr && arr.length > 0 ? arr.join(', ') : 'Not specified';
 
 serve(async (req) => {
+  corsHeaders = corsFor(req);
+  if (originRejected(req)) {
+    return new Response(JSON.stringify({ error: 'Origin not allowed' }), {
+      status: 403,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
   if (req.method === 'OPTIONS') {
-    return new Response(null, { status: 204, headers: corsHeaders });
+    return preflight(req);
   }
 
   try {
     const user = await requireUser(req);
+    await enforceRateLimit(user.id, 'score-job', 30, 60);
 
-    const { job, profile } = await req.json() as { job: Job; profile: ResumeProfile };
+    const { job, profile } = await readJsonBody<{ job: Job; profile: ResumeProfile }>(
+      req,
+      512 * 1024,
+    );
 
     if (!job || !profile) {
       return json({ error: 'Job and profile are required' }, 400);
@@ -266,6 +276,12 @@ about experience claims, assume they are not present. Return ONLY the JSON objec
   } catch (error) {
     if (error instanceof UnauthorizedError) {
       return json({ error: error.message }, 401);
+    }
+    if (error instanceof RateLimitError) {
+      return json({ error: error.message }, 429);
+    }
+    if (error instanceof PayloadTooLargeError) {
+      return json({ error: error.message }, 413);
     }
     console.error('[score-job] Error:', error);
     const errorMessage = error instanceof Error ? error.message : 'Failed to score job';
