@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { recordAgentDocument } from "@/lib/api/documentRevisions";
 
 /** Resolves the signed-in user id; inserts must always carry explicit ownership. */
 async function requireUserId(): Promise<string> {
@@ -415,5 +416,7 @@ export async function generateCoverLetter(
 
   if (error) throw error;
   if (data?.error) throw new Error(data.error);
+  // Persist a new immutable, truth-checked revision for this job.
+  await recordAgentDocument(job.id, "cover_letter", data, "cover_letter/1.0");
   return data as CoverLetter;
 }
