@@ -176,9 +176,11 @@ const Inbox = () => {
           strategic_advice: string | null;
           agent?: string;
           agent_version?: string;
+          dealbreaker_hits?: string[];
+          concerns?: string[];
         };
         if (isGuest()) {
-          data = await guestScoreJob(job) as typeof data;
+          data = await guestScoreJob(job, prefs) as typeof data;
         } else {
           const res = await supabase.functions.invoke("score-job", {
             body: { job, profile },
@@ -199,40 +201,32 @@ const Inbox = () => {
           cons: data.cons,
           gaps: data.gaps,
           strategic_advice: data.strategic_advice,
+          dealbreaker_hits: data.dealbreaker_hits ?? [],
+          concerns: data.concerns ?? [],
         });
 
-        // Auto-move to not_fit if score < 50 and still in inbox
-        if (data.match_score < 50 && job.pipeline_status === "inbox") {
-          await updateJobStatus(jobId, "not_fit");
-          setJobs((prev) => prev.filter((j) => j.id !== jobId));
-          toast({
-            title: "Job scored & moved",
-            description: `${data.recommendation} (${data.match_score}%) - Auto-moved to Not a Fit`,
-          });
-          await refreshCounts();
-        } else {
-          setJobs((prev) =>
-            prev.map((j) =>
-              j.id === jobId
-                ? {
-                    ...j,
-                    match: {
-                      id: "",
-                      job_id: jobId,
-                      resume_profile_id: profile.id,
-                      scored_at: new Date().toISOString(),
-                      ...data,
-                    },
-                  }
-                : j
-            )
-          );
-          setNewlyScoredJobId(jobId);
-          toast({
-            title: "Job scored",
-            description: `${data.recommendation} - ${data.match_score}% match`,
-          });
-        }
+        // Scoring never moves a job on its own — you decide where it goes.
+        setJobs((prev) =>
+          prev.map((j) =>
+            j.id === jobId
+              ? {
+                  ...j,
+                  match: {
+                    id: "",
+                    job_id: jobId,
+                    resume_profile_id: profile.id,
+                    scored_at: new Date().toISOString(),
+                    ...data,
+                  },
+                }
+              : j
+          )
+        );
+        setNewlyScoredJobId(jobId);
+        toast({
+          title: "Job scored",
+          description: `${data.recommendation} - ${data.match_score}% match`,
+        });
       } catch (error) {
         console.error("Scoring error:", error);
         toast({
@@ -269,7 +263,6 @@ const Inbox = () => {
     setIsScoringAll(true);
     let scored = 0;
     let failed = 0;
-    let movedToNotFit = 0;
 
     for (const job of unscoredJobs) {
       try {
@@ -285,9 +278,11 @@ const Inbox = () => {
           strategic_advice: string | null;
           agent?: string;
           agent_version?: string;
+          dealbreaker_hits?: string[];
+          concerns?: string[];
         };
         if (isGuest()) {
-          data = await guestScoreJob(job) as typeof data;
+          data = await guestScoreJob(job, prefs) as typeof data;
         } else {
           const res = await supabase.functions.invoke("score-job", {
             body: { job, profile },
@@ -307,30 +302,26 @@ const Inbox = () => {
           cons: data.cons,
           gaps: data.gaps,
           strategic_advice: data.strategic_advice,
+          dealbreaker_hits: data.dealbreaker_hits ?? [],
+          concerns: data.concerns ?? [],
         });
 
-        // Auto-move low scores
-        if (data.match_score < 50 && job.pipeline_status === "inbox") {
-          await updateJobStatus(job.id, "not_fit");
-          movedToNotFit++;
-        } else {
-          setJobs((prev) =>
-            prev.map((j) =>
-              j.id === job.id
-                ? {
-                    ...j,
-                    match: {
-                      id: "",
-                      job_id: job.id,
-                      resume_profile_id: profile.id,
-                      scored_at: new Date().toISOString(),
-                      ...data,
-                    },
-                  }
-                : j
-            )
-          );
-        }
+        setJobs((prev) =>
+          prev.map((j) =>
+            j.id === job.id
+              ? {
+                  ...j,
+                  match: {
+                    id: "",
+                    job_id: job.id,
+                    resume_profile_id: profile.id,
+                    scored_at: new Date().toISOString(),
+                    ...data,
+                  },
+                }
+              : j
+          )
+        );
 
         scored++;
         await new Promise((r) => setTimeout(r, 1000));
@@ -343,16 +334,9 @@ const Inbox = () => {
     setScoringJobId(null);
     setIsScoringAll(false);
 
-    // Remove jobs that were moved to not_fit
-    if (movedToNotFit > 0) {
-      const updatedJobs = await fetchJobsByStatus("inbox");
-      setJobs(updatedJobs);
-      await refreshCounts();
-    }
-
     toast({
       title: "Batch scoring complete",
-      description: `Scored ${scored} jobs${movedToNotFit > 0 ? `, ${movedToNotFit} auto-moved to Not a Fit` : ""}${failed > 0 ? `, ${failed} failed` : ""}`,
+      description: `Scored ${scored} job${scored === 1 ? "" : "s"}${failed > 0 ? `, ${failed} failed` : ""}. Nothing was moved automatically.`,
     });
   }, [jobs, profile, toast, refreshCounts]);
 
