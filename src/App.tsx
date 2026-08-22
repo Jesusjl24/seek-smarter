@@ -42,7 +42,11 @@ const App = () => (
                   </RequireAuth>
                 }
               >
+                <Route path="/today" element={<Today />} />
+                <Route path="/documents" element={<Documents />} />
+                <Route path="/assistant" element={<AssistantActivity />} />
                 <Route path="/" element={<Inbox />} />
+
                 <Route path="/shortlist" element={<Shortlist />} />
                 <Route path="/not-a-fit" element={<NotAFit />} />
                 <Route path="/ai-lab" element={<AILab />} />
