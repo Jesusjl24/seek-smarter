@@ -1,0 +1,1 @@
+REVOKE EXECUTE ON FUNCTION public.update_candidate_preferences_updated_at() FROM anon, authenticated, PUBLIC;
