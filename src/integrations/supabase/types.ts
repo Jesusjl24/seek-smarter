@@ -290,7 +290,6 @@ export type Database = {
           file_name: string | null
           file_path: string | null
           file_type: string | null
-          file_url: string | null
           id: string
           industries: string[] | null
           previous_titles: string[] | null
@@ -308,7 +307,6 @@ export type Database = {
           file_name?: string | null
           file_path?: string | null
           file_type?: string | null
-          file_url?: string | null
           id?: string
           industries?: string[] | null
           previous_titles?: string[] | null
@@ -326,7 +324,6 @@ export type Database = {
           file_name?: string | null
           file_path?: string | null
           file_type?: string | null
-          file_url?: string | null
           id?: string
           industries?: string[] | null
           previous_titles?: string[] | null
