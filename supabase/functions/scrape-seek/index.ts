@@ -349,7 +349,19 @@ serve(async (req) => {
     const user = await requireUser(req);
     await enforceRateLimit(user.id, 'scrape-seek', 10, 60);
 
-    const body = await readJsonBody<Record<string, unknown>>(req, 64 * 1024);
+    const body = await readJsonBody<{
+      keywords?: string;
+      location?: string;
+      limit?: unknown;
+      filters?: {
+        workType?: string;
+        workArrangement?: string;
+        salaryMin?: string;
+        salaryMax?: string;
+        salaryType?: string;
+        datePosted?: string;
+      };
+    }>(req, 64 * 1024);
     const { keywords, location, filters, limit: rawLimit } = body;
 
     if (!keywords || typeof keywords !== 'string' || keywords.trim() === '') {
