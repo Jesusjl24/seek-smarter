@@ -12,7 +12,7 @@ serve(async (req) => {
   }
 
   try {
-    const user = await requireUser(req);
+    await requireUser(req);
 
     const { fileContent, fileName, fileType } = await req.json();
 
