@@ -55,8 +55,12 @@ serve(async (req) => {
 
   try {
     const user = await requireUser(req);
+    await enforceRateLimit(user.id, 'score-job', 30, 60);
 
-    const { job, profile } = await req.json() as { job: Job; profile: ResumeProfile };
+    const { job, profile } = await readJsonBody<{ job: Job; profile: ResumeProfile }>(
+      req,
+      512 * 1024,
+    );
 
     if (!job || !profile) {
       return json({ error: 'Job and profile are required' }, 400);
@@ -272,6 +276,12 @@ about experience claims, assume they are not present. Return ONLY the JSON objec
   } catch (error) {
     if (error instanceof UnauthorizedError) {
       return json({ error: error.message }, 401);
+    }
+    if (error instanceof RateLimitError) {
+      return json({ error: error.message }, 429);
+    }
+    if (error instanceof PayloadTooLargeError) {
+      return json({ error: error.message }, 413);
     }
     console.error('[score-job] Error:', error);
     const errorMessage = error instanceof Error ? error.message : 'Failed to score job';

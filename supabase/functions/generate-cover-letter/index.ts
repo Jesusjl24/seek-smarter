@@ -41,13 +41,14 @@ serve(async (req) => {
 
   try {
     const user = await requireUser(req);
+    await enforceRateLimit(user.id, 'generate-cover-letter', 10, 60);
 
-    const { job, profile, match_score, tailored_highlights } = await req.json() as { 
-      job: Job; 
+    const { job, profile, match_score, tailored_highlights } = await readJsonBody<{
+      job: Job;
       profile: ResumeProfile;
       match_score: number;
       tailored_highlights?: string[];
-    };
+    }>(req, 512 * 1024);
 
     if (!job || !profile) {
       return new Response(
@@ -240,6 +241,12 @@ Write a compelling 250-350 word cover letter. Return ONLY the JSON object.`;
   } catch (error) {
     if (error instanceof UnauthorizedError) {
       return new Response(JSON.stringify({ error: error.message }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+    if (error instanceof RateLimitError) {
+      return new Response(JSON.stringify({ error: error.message }), { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+    if (error instanceof PayloadTooLargeError) {
+      return new Response(JSON.stringify({ error: error.message }), { status: 413, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
     console.error('Error generating cover letter:', error);
     const errorMessage = error instanceof Error ? error.message : 'Failed to generate cover letter';

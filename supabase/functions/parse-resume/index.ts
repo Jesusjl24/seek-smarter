@@ -18,14 +18,39 @@ serve(async (req) => {
   }
 
   try {
-    await requireUser(req);
+    const user = await requireUser(req);
+    await enforceRateLimit(user.id, 'parse-resume', 10, 60);
 
-    const { fileContent, fileName, fileType } = await req.json();
+    const { fileContent, fileName, fileType } = await readJsonBody<{
+      fileContent?: string;
+      fileName?: string;
+      fileType?: string;
+    }>(req, 15 * 1024 * 1024);
 
-    if (!fileContent) {
+    if (!fileContent || typeof fileContent !== 'string') {
       return new Response(
         JSON.stringify({ error: 'File content is required' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const ALLOWED_TYPES = [
+      'application/pdf',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'text/plain',
+    ];
+    if (!fileType || !ALLOWED_TYPES.includes(fileType)) {
+      return new Response(
+        JSON.stringify({ error: 'Unsupported file type. Upload a PDF, DOCX, or TXT file.' }),
+        { status: 415, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // base64 expands by ~4/3 — cap decoded size at 10MB
+    if (fileContent.length * 0.75 > 10 * 1024 * 1024) {
+      return new Response(
+        JSON.stringify({ error: 'File too large. Maximum size is 10MB.' }),
+        { status: 413, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -252,6 +277,12 @@ ${textContent.substring(0, 8000)}`
   } catch (error) {
     if (error instanceof UnauthorizedError) {
       return new Response(JSON.stringify({ error: error.message }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+    if (error instanceof RateLimitError) {
+      return new Response(JSON.stringify({ error: error.message }), { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+    if (error instanceof PayloadTooLargeError) {
+      return new Response(JSON.stringify({ error: error.message }), { status: 413, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
     console.error('Error parsing resume:', error);
     const errorMessage = error instanceof Error ? error.message : 'Failed to parse resume';

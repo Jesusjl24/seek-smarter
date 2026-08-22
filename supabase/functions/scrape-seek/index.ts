@@ -28,6 +28,8 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { corsFor, originRejected, preflight } from "../_shared/cors.ts";
+import { requireUser, UnauthorizedError } from "../_shared/auth.ts";
+import { enforceRateLimit, readJsonBody, RateLimitError, PayloadTooLargeError } from "../_shared/ratelimit.ts";
 
 let corsHeaders: Record<string, string> = {};
 
@@ -344,7 +346,10 @@ serve(async (req) => {
   }
 
   try {
-    const body = await req.json();
+    const user = await requireUser(req);
+    await enforceRateLimit(user.id, 'scrape-seek', 10, 60);
+
+    const body = await readJsonBody<Record<string, unknown>>(req, 64 * 1024);
     const { keywords, location, filters, limit: rawLimit } = body;
 
     if (!keywords || typeof keywords !== 'string' || keywords.trim() === '') {
@@ -525,6 +530,15 @@ serve(async (req) => {
     });
 
   } catch (error) {
+    if (error instanceof UnauthorizedError) {
+      return jsonResponse({ success: false, jobs: [], error: error.message }, 401);
+    }
+    if (error instanceof RateLimitError) {
+      return jsonResponse({ success: false, jobs: [], error: error.message }, 429);
+    }
+    if (error instanceof PayloadTooLargeError) {
+      return jsonResponse({ success: false, jobs: [], error: error.message }, 413);
+    }
     console.error('[scrape-seek] Error:', error);
     const errorMessage = error instanceof Error ? error.message : 'Failed to scrape SEEK';
     return jsonResponse({ 
