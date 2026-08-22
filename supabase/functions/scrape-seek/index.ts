@@ -27,12 +27,9 @@
  */
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { corsFor, originRejected, preflight } from "../_shared/cors.ts";
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
-};
+let corsHeaders: Record<string, string> = {};
 
 interface ScrapedJob {
   seek_job_id: string;
@@ -334,9 +331,16 @@ async function enrichJobsFromIds(
 }
 
 serve(async (req) => {
+  corsHeaders = corsFor(req);
+  if (originRejected(req)) {
+    return new Response(JSON.stringify({ error: 'Origin not allowed' }), {
+      status: 403,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
-    return new Response(null, { status: 204, headers: corsHeaders });
+    return preflight(req);
   }
 
   try {

@@ -2,11 +2,10 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { requireUser, loadPreferences, UnauthorizedError } from "../_shared/auth.ts";
 import { evaluateDealbreakers, type CandidatePreferences } from "../_shared/dealbreakers.ts";
 import { bandLabel, resolvePolicy } from "../_shared/policy.ts";
+import { corsFor, originRejected, preflight } from "../_shared/cors.ts";
+import { enforceRateLimit, readJsonBody, RateLimitError, PayloadTooLargeError } from "../_shared/ratelimit.ts";
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
-};
+let corsHeaders: Record<string, string> = {};
 
 interface ResumeProfile {
   skills_technical: string[];
@@ -43,8 +42,15 @@ const list = (arr?: string[] | null) =>
   arr && arr.length > 0 ? arr.join(', ') : 'Not specified';
 
 serve(async (req) => {
+  corsHeaders = corsFor(req);
+  if (originRejected(req)) {
+    return new Response(JSON.stringify({ error: 'Origin not allowed' }), {
+      status: 403,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
   if (req.method === 'OPTIONS') {
-    return new Response(null, { status: 204, headers: corsHeaders });
+    return preflight(req);
   }
 
   try {
