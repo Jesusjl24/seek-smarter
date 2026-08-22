@@ -445,57 +445,100 @@ const Inbox = () => {
     );
   }
 
+  const strongCount = jobs.filter(
+    (j) => j.match && classifyScore(j.match.match_score, policy) === "strong_apply"
+  ).length;
+  const reviewCount = jobs.filter(
+    (j) => j.match && classifyScore(j.match.match_score, policy) === "review"
+  ).length;
+
   return (
     <>
       <SearchProgress isSearching={isSearching} jobLimit={parseInt(filters.jobLimit) || 20} />
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold mb-1">Inbox</h1>
-          <p className="text-muted-foreground">New jobs land here. File them into Shortlist or Not a Fit.</p>
-        </div>
+      <div className="space-y-5" data-testid="inbox-page">
+        <header className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight">Job Inbox</h1>
+            <p className="text-sm text-muted-foreground">
+              {jobs.length} role{jobs.length === 1 ? "" : "s"} waiting · {unscoredCount} not
+              assessed · {strongCount} Strong Apply · {reviewCount} Review
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              size="sm"
+              disabled={reviewQueue.length === 0}
+              onClick={() => setReviewId(reviewQueue[0]?.id ?? null)}
+              data-testid="inbox-review-next"
+            >
+              Review next
+              <ArrowRight className="ml-1.5 h-4 w-4" aria-hidden />
+            </Button>
+            <Button
+              size="sm"
+              variant="assistant"
+              onClick={handleScoreAll}
+              disabled={isScoringAll || unscoredCount === 0 || !profile}
+            >
+              <Sparkles className="mr-1.5 h-4 w-4" aria-hidden />
+              {isScoringAll ? "Assessing…" : `Assess ${unscoredCount || ""}`.trim()}
+            </Button>
+            <Button size="sm" variant="outline" onClick={handleExport} disabled={jobs.length === 0}>
+              <Download className="mr-1.5 h-4 w-4" aria-hidden />
+              Export
+            </Button>
+          </div>
+        </header>
 
-        <SearchBar
-          keywords={filters.keywords}
-          location={filters.location}
-          onKeywordsChange={(keywords) => setFilters((f) => ({ ...f, keywords }))}
-          onLocationChange={(location) => setFilters((f) => ({ ...f, location }))}
+        <PolicyBar policy={policy} compact />
+
+        <SearchSourceBar
+          filters={filters}
+          onFiltersChange={setFilters}
           onSearch={handleSearch}
-          isLoading={isSearching}
+          isSearching={isSearching}
         />
 
-        <div className="flex flex-col lg:flex-row gap-6">
-          <div className="lg:w-64 flex-shrink-0 space-y-4">
-            <SearchFiltersPanel filters={filters} onFiltersChange={setFilters} />
-            <Separator />
-            <ActionButtons
-              onScoreAll={handleScoreAll}
-              onExport={handleExport}
-              isScoring={isScoringAll}
-              hasJobs={jobs.length > 0}
-              hasResume={!!profile}
-              unscoredCount={unscoredCount}
-            />
+        {jobs.length === 0 ? (
+          <div className="rounded-lg border border-dashed p-10 text-center">
+            <p className="text-sm font-medium">Your inbox is empty</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Run a search above to bring roles in.
+            </p>
           </div>
-          <div className="flex-1">
-            <JobList
-              jobs={jobs}
-              onScore={handleScoreJob}
-              onDelete={handleDeleteJob}
-              onDeleteMultiple={handleDeleteMultiple}
-              onShortlist={(jobId) => handleMoveToStatus(jobId, "shortlist")}
-              onNotAFit={(jobId) => handleMoveToStatus(jobId, "not_fit")}
-              onBulkShortlist={(jobIds) => handleBulkMoveToStatus(jobIds, "shortlist")}
-              onBulkNotAFit={(jobIds) => handleBulkMoveToStatus(jobIds, "not_fit")}
-              scoringJobId={scoringJobId}
-              hasResume={!!profile}
-              newlyScoredJobId={newlyScoredJobId}
-              onScoredJobViewed={() => setNewlyScoredJobId(null)}
-            />
+        ) : (
+          <div className="space-y-3">
+            {jobs.map((job) => (
+              <RecommendationCard
+                key={job.id}
+                job={job}
+                policy={policy}
+                hasResume={!!profile}
+                isScoring={scoringJobId === job.id}
+                hasTailoredResume={artifactKinds[job.id]?.has("tailored_resume") ?? false}
+                hasCoverLetter={artifactKinds[job.id]?.has("cover_letter") ?? false}
+                onReview={() => setReviewId(job.id)}
+                onScore={() => handleScoreJob(job.id)}
+                onShortlist={() => handleMoveToStatus(job.id, "shortlist")}
+                onNotAFit={() => handleMoveToStatus(job.id, "not_fit")}
+                onDelete={() => handleDeleteJob(job.id)}
+              />
+            ))}
           </div>
-        </div>
+        )}
+
+        <ReviewQueue
+          queue={reviewQueue}
+          startId={reviewId}
+          policy={policy}
+          onClose={() => setReviewId(null)}
+          onShortlist={(id) => handleMoveToStatus(id, "shortlist")}
+          onNotAFit={(id) => handleMoveToStatus(id, "not_fit")}
+        />
       </div>
     </>
   );
 };
+
 
 export default Inbox;
