@@ -385,6 +385,8 @@ export async function generateTailoredResume(
 
   if (error) throw error;
   if (data?.error) throw new Error(data.error);
+  // Persist a new immutable, truth-checked revision. Never overwrites the master.
+  await recordAgentDocument(job.id, "resume", data, "resume_tailor/1.0");
   return data as TailoredResume;
 }
 
