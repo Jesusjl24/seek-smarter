@@ -28,13 +28,52 @@ interface AppSidebarProps {
   onExitGuest?: () => void;
 }
 
-const navItems = [
-  { title: "Inbox", url: "/", icon: Inbox, countKey: "inbox" as const },
-  { title: "Shortlist", url: "/shortlist", icon: Star, countKey: "shortlist" as const },
-  { title: "Not a Fit", url: "/not-a-fit", icon: XCircle, countKey: "not_fit" as const },
-  { title: "AI Lab", url: "/ai-lab", icon: FlaskConical, countKey: null },
-  { title: "Career Profile", url: "/settings", icon: SlidersHorizontal, countKey: null },
+type NavItem = {
+  title: string;
+  url: string;
+  icon: typeof Inbox;
+  countKey: "inbox" | "shortlist" | "not_fit" | null;
+  testId?: string;
+};
+
+const navGroups: { label: string; items: NavItem[] }[] = [
+  {
+    label: "Daily",
+    items: [
+      { title: "Today", url: "/today", icon: Sun, countKey: null, testId: "nav-today" },
+      { title: "Job Inbox", url: "/", icon: Inbox, countKey: "inbox" },
+      {
+        title: "Assistant Activity",
+        url: "/assistant",
+        icon: Activity,
+        countKey: null,
+        testId: "nav-assistant",
+      },
+      {
+        title: "Documents",
+        url: "/documents",
+        icon: FileText,
+        countKey: null,
+        testId: "nav-documents",
+      },
+    ],
+  },
+  {
+    label: "Pipeline",
+    items: [
+      { title: "Shortlist", url: "/shortlist", icon: Star, countKey: "shortlist" },
+      { title: "Not a Fit", url: "/not-a-fit", icon: XCircle, countKey: "not_fit" },
+    ],
+  },
+  {
+    label: "Setup",
+    items: [
+      { title: "Career Profile", url: "/settings", icon: SlidersHorizontal, countKey: null },
+      { title: "AI Lab", url: "/ai-lab", icon: FlaskConical, countKey: null },
+    ],
+  },
 ];
+
 
 export function AppSidebar({ profile, onProfileUpdate, counts, isGuest, onExitGuest }: AppSidebarProps) {
   const { user, signOut } = useAuth();
