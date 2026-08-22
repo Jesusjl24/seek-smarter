@@ -4,6 +4,7 @@
 // report `connected: false` and an empty event list.
 
 import type { JobWithMatch } from "@/types/job";
+import type { Tables, TablesInsert } from "@/integrations/supabase/types";
 
 export type AssistantRunStatus = "never_run" | "completed";
 
