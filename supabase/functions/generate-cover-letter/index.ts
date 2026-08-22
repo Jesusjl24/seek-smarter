@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { requireUser, UnauthorizedError, loadPreferences } from "../_shared/auth.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -29,10 +30,12 @@ const AGENT_VERSION = '1.0';
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
+    return new Response(null, { status: 204, headers: corsHeaders });
   }
 
   try {
+    const user = await requireUser(req);
+
     const { job, profile, match_score, tailored_highlights } = await req.json() as { 
       job: Job; 
       profile: ResumeProfile;
@@ -81,7 +84,19 @@ CRITICAL RULES:
       ? `\nKEY HIGHLIGHTS TO EMPHASIZE:\n${tailored_highlights.map(h => `- ${h}`).join('\n')}`
       : '';
 
-    const prompt = `Write a professional Australian-style cover letter for this job application.
+    const prefs = await loadPreferences(user.id);
+    const prefsBlock = prefs
+      ? `CANDIDATE CONSTRAINTS AND GOALS (respect these; never contradict them):
+- Job goals: ${prefs.job_goals || 'Not specified'}
+- Career direction: ${prefs.career_direction || 'Not specified'}
+- Target titles: ${(prefs.target_titles ?? []).join(', ') || 'Not specified'}
+- Verified experience (the ONLY claims you may present as proven): ${prefs.verified_experience || 'Not specified'}
+- Never invent experience, employers, metrics, or qualifications beyond the resume and the verified experience above.`
+      : 'CANDIDATE CONSTRAINTS: none saved. Use only what the resume states; invent nothing.';
+
+    const prompt = `${prefsBlock}
+
+Write a professional Australian-style cover letter for this job application.
 
 CANDIDATE PROFILE:
 - Technical Skills: ${profile.skills_technical.join(', ') || 'None specified'}
@@ -217,6 +232,9 @@ Write a compelling 250-350 word cover letter. Return ONLY the JSON object.`;
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {
+    if (error instanceof UnauthorizedError) {
+      return new Response(JSON.stringify({ error: error.message }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
     console.error('Error generating cover letter:', error);
     const errorMessage = error instanceof Error ? error.message : 'Failed to generate cover letter';
     return new Response(

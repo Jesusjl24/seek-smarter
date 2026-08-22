@@ -1,4 +1,4 @@
-import { Inbox, Star, XCircle, FlaskConical, LogOut, Sparkles, DoorOpen } from "lucide-react";
+import { Inbox, Star, XCircle, FlaskConical, LogOut, Sparkles, DoorOpen, SlidersHorizontal } from "lucide-react";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { NavLink } from "@/components/NavLink";
 import { Button } from "@/components/ui/button";
@@ -33,6 +33,7 @@ const navItems = [
   { title: "Shortlist", url: "/shortlist", icon: Star, countKey: "shortlist" as const },
   { title: "Not a Fit", url: "/not-a-fit", icon: XCircle, countKey: "not_fit" as const },
   { title: "AI Lab", url: "/ai-lab", icon: FlaskConical, countKey: null },
+  { title: "Career Profile", url: "/settings", icon: SlidersHorizontal, countKey: null },
 ];
 
 export function AppSidebar({ profile, onProfileUpdate, counts, isGuest, onExitGuest }: AppSidebarProps) {

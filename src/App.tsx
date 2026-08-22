@@ -11,6 +11,7 @@ import Inbox from "./pages/Inbox";
 import Shortlist from "./pages/Shortlist";
 import NotAFit from "./pages/NotAFit";
 import AILab from "./pages/AILab";
+import Settings from "./pages/Settings";
 import AuthPage from "./pages/Auth";
 import Landing from "./pages/Landing";
 import GuestEntry from "./pages/GuestEntry";
@@ -41,6 +42,7 @@ const App = () => (
                 <Route path="/shortlist" element={<Shortlist />} />
                 <Route path="/not-a-fit" element={<NotAFit />} />
                 <Route path="/ai-lab" element={<AILab />} />
+                <Route path="/settings" element={<Settings />} />
               </Route>
               <Route path="*" element={<NotFound />} />
             </Routes>

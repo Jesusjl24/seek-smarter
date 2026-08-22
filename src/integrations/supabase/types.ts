@@ -14,6 +14,72 @@ export type Database = {
   }
   public: {
     Tables: {
+      candidate_preferences: {
+        Row: {
+          career_direction: string | null
+          created_at: string
+          currency: string
+          dealbreakers: string[]
+          excluded_titles: string[]
+          job_goals: string | null
+          locations: string[]
+          mandatory_qualifications: string[]
+          policy_review: number
+          policy_strong: number
+          salary_min: number | null
+          salary_target: number | null
+          target_industries: string[]
+          target_titles: string[]
+          updated_at: string
+          user_id: string
+          verified_experience: string | null
+          work_arrangements: string[]
+          work_types: string[]
+        }
+        Insert: {
+          career_direction?: string | null
+          created_at?: string
+          currency?: string
+          dealbreakers?: string[]
+          excluded_titles?: string[]
+          job_goals?: string | null
+          locations?: string[]
+          mandatory_qualifications?: string[]
+          policy_review?: number
+          policy_strong?: number
+          salary_min?: number | null
+          salary_target?: number | null
+          target_industries?: string[]
+          target_titles?: string[]
+          updated_at?: string
+          user_id: string
+          verified_experience?: string | null
+          work_arrangements?: string[]
+          work_types?: string[]
+        }
+        Update: {
+          career_direction?: string | null
+          created_at?: string
+          currency?: string
+          dealbreakers?: string[]
+          excluded_titles?: string[]
+          job_goals?: string | null
+          locations?: string[]
+          mandatory_qualifications?: string[]
+          policy_review?: number
+          policy_strong?: number
+          salary_min?: number | null
+          salary_target?: number | null
+          target_industries?: string[]
+          target_titles?: string[]
+          updated_at?: string
+          user_id?: string
+          verified_experience?: string | null
+          work_arrangements?: string[]
+          work_types?: string[]
+        }
+        Relationships: []
+      }
       job_artifacts: {
         Row: {
           agent: string
@@ -56,7 +122,9 @@ export type Database = {
         Row: {
           agent: string | null
           agent_version: string | null
+          concerns: string[]
           cons: string[] | null
+          dealbreaker_hits: string[]
           gaps: string[] | null
           id: string
           job_id: string
@@ -74,7 +142,9 @@ export type Database = {
         Insert: {
           agent?: string | null
           agent_version?: string | null
+          concerns?: string[]
           cons?: string[] | null
+          dealbreaker_hits?: string[]
           gaps?: string[] | null
           id?: string
           job_id: string
@@ -92,7 +162,9 @@ export type Database = {
         Update: {
           agent?: string | null
           agent_version?: string | null
+          concerns?: string[]
           cons?: string[] | null
+          dealbreaker_hits?: string[]
           gaps?: string[] | null
           id?: string
           job_id?: string
