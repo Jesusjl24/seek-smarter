@@ -8,6 +8,10 @@ import { AuthProvider } from "@/hooks/useAuth";
 import { RequireAuth } from "@/components/auth/RequireAuth";
 import { MainLayout } from "@/components/layout/MainLayout";
 import Inbox from "./pages/Inbox";
+import Today from "./pages/Today";
+import Documents from "./pages/Documents";
+import AssistantActivity from "./pages/AssistantActivity";
+
 import Shortlist from "./pages/Shortlist";
 import NotAFit from "./pages/NotAFit";
 import AILab from "./pages/AILab";
