@@ -1,4 +1,17 @@
-import { Inbox, Star, XCircle, FlaskConical, LogOut, Sparkles, DoorOpen, SlidersHorizontal } from "lucide-react";
+import {
+  Inbox,
+  Star,
+  XCircle,
+  FlaskConical,
+  LogOut,
+  Sparkles,
+  DoorOpen,
+  SlidersHorizontal,
+  Sun,
+  Activity,
+  FileText,
+} from "lucide-react";
+
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { NavLink } from "@/components/NavLink";
 import { Button } from "@/components/ui/button";
