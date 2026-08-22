@@ -1,4 +1,17 @@
-import { Inbox, Star, XCircle, FlaskConical, LogOut, Sparkles, DoorOpen, SlidersHorizontal } from "lucide-react";
+import {
+  Inbox,
+  Star,
+  XCircle,
+  FlaskConical,
+  LogOut,
+  Sparkles,
+  DoorOpen,
+  SlidersHorizontal,
+  Sun,
+  Activity,
+  FileText,
+} from "lucide-react";
+
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { NavLink } from "@/components/NavLink";
 import { Button } from "@/components/ui/button";
@@ -28,13 +41,52 @@ interface AppSidebarProps {
   onExitGuest?: () => void;
 }
 
-const navItems = [
-  { title: "Inbox", url: "/", icon: Inbox, countKey: "inbox" as const },
-  { title: "Shortlist", url: "/shortlist", icon: Star, countKey: "shortlist" as const },
-  { title: "Not a Fit", url: "/not-a-fit", icon: XCircle, countKey: "not_fit" as const },
-  { title: "AI Lab", url: "/ai-lab", icon: FlaskConical, countKey: null },
-  { title: "Career Profile", url: "/settings", icon: SlidersHorizontal, countKey: null },
+type NavItem = {
+  title: string;
+  url: string;
+  icon: typeof Inbox;
+  countKey: "inbox" | "shortlist" | "not_fit" | null;
+  testId?: string;
+};
+
+const navGroups: { label: string; items: NavItem[] }[] = [
+  {
+    label: "Daily",
+    items: [
+      { title: "Today", url: "/today", icon: Sun, countKey: null, testId: "nav-today" },
+      { title: "Job Inbox", url: "/", icon: Inbox, countKey: "inbox" },
+      {
+        title: "Assistant Activity",
+        url: "/assistant",
+        icon: Activity,
+        countKey: null,
+        testId: "nav-assistant",
+      },
+      {
+        title: "Documents",
+        url: "/documents",
+        icon: FileText,
+        countKey: null,
+        testId: "nav-documents",
+      },
+    ],
+  },
+  {
+    label: "Pipeline",
+    items: [
+      { title: "Shortlist", url: "/shortlist", icon: Star, countKey: "shortlist" },
+      { title: "Not a Fit", url: "/not-a-fit", icon: XCircle, countKey: "not_fit" },
+    ],
+  },
+  {
+    label: "Setup",
+    items: [
+      { title: "Career Profile", url: "/settings", icon: SlidersHorizontal, countKey: null },
+      { title: "AI Lab", url: "/ai-lab", icon: FlaskConical, countKey: null },
+    ],
+  },
 ];
+
 
 export function AppSidebar({ profile, onProfileUpdate, counts, isGuest, onExitGuest }: AppSidebarProps) {
   const { user, signOut } = useAuth();
@@ -63,33 +115,37 @@ export function AppSidebar({ profile, onProfileUpdate, counts, isGuest, onExitGu
       </SidebarHeader>
 
       <SidebarContent>
-        <SidebarGroup>
-          <SidebarGroupLabel>Pipeline</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {navItems.map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild>
-                    <NavLink
-                      to={item.url}
-                      end={item.url === "/"}
-                      className="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-sidebar-accent transition-colors"
-                      activeClassName="bg-sidebar-accent text-sidebar-accent-foreground font-medium"
-                    >
-                      <item.icon className="h-4 w-4" />
-                      <span className="flex-1">{item.title}</span>
-                      {item.countKey && counts[item.countKey] > 0 && (
-                        <Badge variant="secondary" className="text-xs px-2 py-0">
-                          {counts[item.countKey]}
-                        </Badge>
-                      )}
-                    </NavLink>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+        {navGroups.map((group) => (
+          <SidebarGroup key={group.label}>
+            <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {group.items.map((item) => (
+                  <SidebarMenuItem key={item.title}>
+                    <SidebarMenuButton asChild>
+                      <NavLink
+                        to={item.url}
+                        end={item.url === "/"}
+                        data-testid={item.testId}
+                        className="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-sidebar-accent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        activeClassName="bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+                      >
+                        <item.icon className="h-4 w-4" />
+                        <span className="flex-1">{item.title}</span>
+                        {item.countKey && counts[item.countKey] > 0 && (
+                          <Badge variant="secondary" className="text-xs px-2 py-0">
+                            {counts[item.countKey]}
+                          </Badge>
+                        )}
+                      </NavLink>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        ))}
+
 
         <Separator className="my-2" />
 

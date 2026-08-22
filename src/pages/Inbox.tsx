@@ -1,17 +1,20 @@
-import { useState, useEffect, useCallback } from "react";
-import { SearchBar } from "@/components/search/SearchBar";
-import { SearchFiltersPanel } from "@/components/search/SearchFilters";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { ArrowRight, Download, Sparkles } from "lucide-react";
+import { SearchSourceBar } from "@/components/search/SearchSourceBar";
 import { SearchProgress } from "@/components/search/SearchProgress";
-import { JobList } from "@/components/jobs/JobList";
-import { ActionButtons } from "@/components/sidebar/ActionButtons";
-import { Separator } from "@/components/ui/separator";
+import { RecommendationCard } from "@/components/jobs/RecommendationCard";
+import { ReviewQueue } from "@/components/jobs/ReviewQueue";
+import { PolicyBar } from "@/components/policy/PolicyBar";
+import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { isGuest, guestScoreJob } from "@/lib/guest";
 import { fetchPreferences } from "@/lib/api/preferences";
+import { classifyScore } from "@/lib/policy";
 import { EMPTY_PREFERENCES, type CandidatePreferences } from "@/types/preferences";
 import {
   fetchJobsByStatus,
+  fetchArtifactsForJobs,
   upsertJobs,
   deleteJob,
   deleteJobs,
@@ -21,6 +24,7 @@ import {
 } from "@/lib/api/jobs";
 import { useLayoutContext } from "@/components/layout/MainLayout";
 import type { JobWithMatch, SearchFilters, PipelineStatus } from "@/types/job";
+
 
 const defaultFilters: SearchFilters = {
   keywords: "",
@@ -42,9 +46,16 @@ const Inbox = () => {
   const [scoringJobId, setScoringJobId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [newlyScoredJobId, setNewlyScoredJobId] = useState<string | null>(null);
+  const [reviewId, setReviewId] = useState<string | null>(null);
+  const [artifactKinds, setArtifactKinds] = useState<Record<string, Set<string>>>({});
   const { toast } = useToast();
   const { profile, refreshCounts } = useLayoutContext();
   const [prefs, setPrefs] = useState<CandidatePreferences>(EMPTY_PREFERENCES);
+
+  const policy = useMemo(
+    () => ({ policy_strong: prefs.policy_strong, policy_review: prefs.policy_review }),
+    [prefs.policy_strong, prefs.policy_review]
+  );
 
   // Career profile drives dealbreakers and the score policy shown on cards.
   useEffect(() => {
@@ -59,6 +70,12 @@ const Inbox = () => {
       try {
         const jobsData = await fetchJobsByStatus("inbox");
         setJobs(jobsData);
+        const artifacts = await fetchArtifactsForJobs(jobsData.map((j) => j.id));
+        const map: Record<string, Set<string>> = {};
+        for (const a of artifacts) {
+          (map[a.job_id] ??= new Set()).add(a.artifact_type);
+        }
+        setArtifactKinds(map);
       } catch (error) {
         console.error("Error loading inbox:", error);
         toast({
@@ -72,6 +89,16 @@ const Inbox = () => {
     }
     loadData();
   }, [toast]);
+
+  // Sequential review flow works through assessed roles, best score first.
+  const reviewQueue = useMemo(
+    () =>
+      jobs
+        .filter((j) => !!j.match)
+        .sort((a, b) => (b.match?.match_score ?? 0) - (a.match?.match_score ?? 0)),
+    [jobs]
+  );
+
 
   const handleSearch = useCallback(async () => {
     if (!filters.keywords.trim()) {
@@ -445,57 +472,100 @@ const Inbox = () => {
     );
   }
 
+  const strongCount = jobs.filter(
+    (j) => j.match && classifyScore(j.match.match_score, policy) === "strong_apply"
+  ).length;
+  const reviewCount = jobs.filter(
+    (j) => j.match && classifyScore(j.match.match_score, policy) === "review"
+  ).length;
+
   return (
     <>
       <SearchProgress isSearching={isSearching} jobLimit={parseInt(filters.jobLimit) || 20} />
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold mb-1">Inbox</h1>
-          <p className="text-muted-foreground">New jobs land here. File them into Shortlist or Not a Fit.</p>
-        </div>
+      <div className="space-y-5" data-testid="inbox-page">
+        <header className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight">Job Inbox</h1>
+            <p className="text-sm text-muted-foreground">
+              {jobs.length} role{jobs.length === 1 ? "" : "s"} waiting · {unscoredCount} not
+              assessed · {strongCount} Strong Apply · {reviewCount} Review
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              size="sm"
+              disabled={reviewQueue.length === 0}
+              onClick={() => setReviewId(reviewQueue[0]?.id ?? null)}
+              data-testid="inbox-review-next"
+            >
+              Review next
+              <ArrowRight className="ml-1.5 h-4 w-4" aria-hidden />
+            </Button>
+            <Button
+              size="sm"
+              variant="assistant"
+              onClick={handleScoreAll}
+              disabled={isScoringAll || unscoredCount === 0 || !profile}
+            >
+              <Sparkles className="mr-1.5 h-4 w-4" aria-hidden />
+              {isScoringAll ? "Assessing…" : `Assess ${unscoredCount || ""}`.trim()}
+            </Button>
+            <Button size="sm" variant="outline" onClick={handleExport} disabled={jobs.length === 0}>
+              <Download className="mr-1.5 h-4 w-4" aria-hidden />
+              Export
+            </Button>
+          </div>
+        </header>
 
-        <SearchBar
-          keywords={filters.keywords}
-          location={filters.location}
-          onKeywordsChange={(keywords) => setFilters((f) => ({ ...f, keywords }))}
-          onLocationChange={(location) => setFilters((f) => ({ ...f, location }))}
+        <PolicyBar policy={policy} compact />
+
+        <SearchSourceBar
+          filters={filters}
+          onFiltersChange={setFilters}
           onSearch={handleSearch}
-          isLoading={isSearching}
+          isSearching={isSearching}
         />
 
-        <div className="flex flex-col lg:flex-row gap-6">
-          <div className="lg:w-64 flex-shrink-0 space-y-4">
-            <SearchFiltersPanel filters={filters} onFiltersChange={setFilters} />
-            <Separator />
-            <ActionButtons
-              onScoreAll={handleScoreAll}
-              onExport={handleExport}
-              isScoring={isScoringAll}
-              hasJobs={jobs.length > 0}
-              hasResume={!!profile}
-              unscoredCount={unscoredCount}
-            />
+        {jobs.length === 0 ? (
+          <div className="rounded-lg border border-dashed p-10 text-center">
+            <p className="text-sm font-medium">Your inbox is empty</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Run a search above to bring roles in.
+            </p>
           </div>
-          <div className="flex-1">
-            <JobList
-              jobs={jobs}
-              onScore={handleScoreJob}
-              onDelete={handleDeleteJob}
-              onDeleteMultiple={handleDeleteMultiple}
-              onShortlist={(jobId) => handleMoveToStatus(jobId, "shortlist")}
-              onNotAFit={(jobId) => handleMoveToStatus(jobId, "not_fit")}
-              onBulkShortlist={(jobIds) => handleBulkMoveToStatus(jobIds, "shortlist")}
-              onBulkNotAFit={(jobIds) => handleBulkMoveToStatus(jobIds, "not_fit")}
-              scoringJobId={scoringJobId}
-              hasResume={!!profile}
-              newlyScoredJobId={newlyScoredJobId}
-              onScoredJobViewed={() => setNewlyScoredJobId(null)}
-            />
+        ) : (
+          <div className="space-y-3">
+            {jobs.map((job) => (
+              <RecommendationCard
+                key={job.id}
+                job={job}
+                policy={policy}
+                hasResume={!!profile}
+                isScoring={scoringJobId === job.id}
+                hasTailoredResume={artifactKinds[job.id]?.has("tailored_resume") ?? false}
+                hasCoverLetter={artifactKinds[job.id]?.has("cover_letter") ?? false}
+                onReview={() => setReviewId(job.id)}
+                onScore={() => handleScoreJob(job.id)}
+                onShortlist={() => handleMoveToStatus(job.id, "shortlist")}
+                onNotAFit={() => handleMoveToStatus(job.id, "not_fit")}
+                onDelete={() => handleDeleteJob(job.id)}
+              />
+            ))}
           </div>
-        </div>
+        )}
+
+        <ReviewQueue
+          queue={reviewQueue}
+          startId={reviewId}
+          policy={policy}
+          onClose={() => setReviewId(null)}
+          onShortlist={(id) => handleMoveToStatus(id, "shortlist")}
+          onNotAFit={(id) => handleMoveToStatus(id, "not_fit")}
+        />
       </div>
     </>
   );
 };
+
 
 export default Inbox;

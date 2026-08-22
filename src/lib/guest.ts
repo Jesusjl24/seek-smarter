@@ -217,7 +217,77 @@ function seed(): GuestStore {
     ),
   ];
 
-  return { jobs, profile, artifacts: new Map() };
+  // Two demo artifacts so Documents / Today have something real to show.
+  const demoTailored: TailoredResume = {
+    agent_meta: { agent: "resume_tailor", version: "1.0-demo" },
+    target_role: { title: "Senior React Engineer", company: "Linktree" },
+    keywords_to_inject: ["TypeScript", "React", "Design systems"],
+    skills_to_emphasize: ["Full-stack TypeScript", "0→1 product delivery"],
+    summary_rewrite:
+      "Senior product engineer with 8 years shipping SaaS in TypeScript + React.",
+    bullet_rewrites: [
+      {
+        section: "Experience",
+        before: "Built features for the platform team.",
+        after: "Led two 0→1 launches on a TypeScript/React stack.",
+        why: "Quantifies impact and mirrors the JD.",
+      },
+    ],
+    gap_mitigation: [
+      { gap: "Domain experience", workaround: "Highlight adjacent SaaS work." },
+    ],
+    final_notes: "Keep it to one page for a senior IC role.",
+  };
+  const demoCover: CoverLetter = {
+    agent_meta: { agent: "cover_letter_writer", version: "1.0-demo" },
+    target_role: { title: "Senior React Engineer", company: "Linktree" },
+    cover_letter:
+      "Hi Linktree team,\n\nI'm applying for the Senior React Engineer role...\n\n— Demo Candidate",
+    key_points_used: ["8 years TypeScript/React", "Two 0→1 launches"],
+    suggested_subject_lines: ["Senior React Engineer — two 0→1 SaaS launches"],
+    final_checklist: ["Personalise the opening line"],
+  };
+  const artifacts = new Map<string, JobArtifact[]>([
+    [
+      "demo-6",
+      [
+        {
+          id: "demo-art-1",
+          job_id: "demo-6",
+          artifact_type: "tailored_resume",
+          content: demoTailored,
+          agent: "resume_tailor",
+          version: "1.0-demo",
+          created_at: nowIso(),
+        },
+        {
+          id: "demo-art-2",
+          job_id: "demo-6",
+          artifact_type: "cover_letter",
+          content: demoCover,
+          agent: "cover_letter_writer",
+          version: "1.0-demo",
+          created_at: nowIso(),
+        },
+      ],
+    ],
+    [
+      "demo-7",
+      [
+        {
+          id: "demo-art-3",
+          job_id: "demo-7",
+          artifact_type: "tailored_resume",
+          content: { ...demoTailored, target_role: { title: "Lead Frontend Engineer", company: "Employment Hero" } },
+          agent: "resume_tailor",
+          version: "1.0-demo",
+          created_at: nowIso(),
+        },
+      ],
+    ],
+  ]);
+
+  return { jobs, profile, artifacts };
 }
 
 function getStore(): GuestStore {
@@ -466,4 +536,16 @@ export function guestSaveArtifact(a: Omit<JobArtifact, "id" | "created_at">): Jo
 
 export function guestFetchArtifacts(jobId: string): JobArtifact[] {
   return getStore().artifacts.get(jobId) ?? [];
+}
+
+export function guestFetchArtifactsForJobs(jobIds: string[]): JobArtifact[] {
+  const s = getStore();
+  const wanted = new Set(jobIds);
+  const out: JobArtifact[] = [];
+  for (const [jobId, list] of s.artifacts) {
+    if (wanted.has(jobId)) out.push(...list);
+  }
+  return out.sort(
+    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+  );
 }
