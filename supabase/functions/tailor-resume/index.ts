@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { requireUser, UnauthorizedError, loadPreferences } from "../_shared/auth.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -30,10 +31,12 @@ const AGENT_VERSION = '1.0';
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
+    return new Response(null, { status: 204, headers: corsHeaders });
   }
 
   try {
+    const user = await requireUser(req);
+
     const { job, profile, match_score } = await req.json() as { 
       job: Job; 
       profile: ResumeProfile;
@@ -75,7 +78,19 @@ CRITICAL RULES:
 - All suggestions must be actionable and specific
 - Focus on keyword alignment for ATS systems`;
 
-    const prompt = `Generate tailored resume suggestions for this job application.
+    const prefs = await loadPreferences(user.id);
+    const prefsBlock = prefs
+      ? `CANDIDATE CONSTRAINTS AND GOALS (respect these; never contradict them):
+- Job goals: ${prefs.job_goals || 'Not specified'}
+- Career direction: ${prefs.career_direction || 'Not specified'}
+- Target titles: ${(prefs.target_titles ?? []).join(', ') || 'Not specified'}
+- Verified experience (the ONLY claims you may present as proven): ${prefs.verified_experience || 'Not specified'}
+- Never invent experience, employers, metrics, or qualifications beyond the resume and the verified experience above.`
+      : 'CANDIDATE CONSTRAINTS: none saved. Use only what the resume states; invent nothing.';
+
+    const prompt = `${prefsBlock}
+
+Generate tailored resume suggestions for this job application.
 
 CANDIDATE'S CURRENT RESUME/PROFILE:
 ${profile.raw_text || `
@@ -210,6 +225,9 @@ Provide 3-5 bullet rewrites and 1-3 gap mitigations. Be specific and actionable.
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {
+    if (error instanceof UnauthorizedError) {
+      return new Response(JSON.stringify({ error: error.message }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
     console.error('Error tailoring resume:', error);
     const errorMessage = error instanceof Error ? error.message : 'Failed to tailor resume';
     return new Response(
