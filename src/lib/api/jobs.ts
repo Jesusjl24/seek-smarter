@@ -20,6 +20,7 @@ import {
   guestUpsertScraped,
   guestSaveMatch,
   guestFetchArtifacts,
+  guestFetchArtifactsForJobs,
   guestSaveArtifact,
   guestTailorResume,
   guestCoverLetter,
@@ -316,6 +317,20 @@ export async function fetchJobArtifacts(jobId: string): Promise<JobArtifact[]> {
     .from("job_artifacts")
     .select("*")
     .eq("job_id", jobId)
+    .order("created_at", { ascending: false });
+
+  if (error) throw error;
+  return (data || []) as unknown as JobArtifact[];
+}
+
+// Fetch artifacts for many jobs in one round-trip (Today / Documents surfaces)
+export async function fetchArtifactsForJobs(jobIds: string[]): Promise<JobArtifact[]> {
+  if (jobIds.length === 0) return [];
+  if (isGuest()) return guestFetchArtifactsForJobs(jobIds);
+  const { data, error } = await supabase
+    .from("job_artifacts")
+    .select("*")
+    .in("job_id", jobIds)
     .order("created_at", { ascending: false });
 
   if (error) throw error;
