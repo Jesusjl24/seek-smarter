@@ -143,6 +143,31 @@ export async function generateDocumentRevision(
   return data as GenerateDocumentResult;
 }
 
+/**
+ * Bridge for AI agent output (tailor-resume / generate-cover-letter):
+ * stores the result as a new immutable, truth-checked revision.
+ * Best-effort — a storage failure must not lose the generated content on screen.
+ */
+export async function recordAgentDocument(
+  jobId: string,
+  documentType: "resume" | "cover_letter",
+  content: unknown,
+  agentVersion: string
+): Promise<GenerateDocumentResult | null> {
+  if (isGuest()) return null;
+  try {
+    return await generateDocumentRevision({
+      jobId,
+      documentType,
+      content,
+      agentVersion,
+    });
+  } catch (err) {
+    console.error("[documents] failed to store agent revision", err);
+    return null;
+  }
+}
+
 /** Marks the truth check as manually accepted by the owner (audited). */
 export async function manuallyApproveTruthCheck(
   revisionId: string
