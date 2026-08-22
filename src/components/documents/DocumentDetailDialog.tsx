@@ -65,7 +65,7 @@ export function DocumentDetailDialog({
   const [compareId, setCompareId] = useState<string>("master");
 
   const content = useMemo(() => (revision ? readContent(revision) : null), [revision]);
-  const truth = (revision?.truth_check ?? null) as TruthCheckResult | null;
+  const truth = (revision?.truth_check ?? null) as unknown as TruthCheckResult | null;
   const status = revision ? truthStatusOf(revision) : "pending";
 
   const afterLines = content ? contentToLines(content) : [];
