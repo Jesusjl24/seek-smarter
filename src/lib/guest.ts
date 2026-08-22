@@ -33,6 +33,7 @@ export function enableGuest() {
   }
   // Reset store so each demo session starts fresh
   store = null;
+  guestPrefs = null;
 }
 
 export function exitGuest() {
@@ -42,6 +43,7 @@ export function exitGuest() {
     // ignore
   }
   store = null;
+  guestPrefs = null;
 }
 
 // ---- In-memory demo store ----
