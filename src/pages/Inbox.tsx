@@ -46,9 +46,16 @@ const Inbox = () => {
   const [scoringJobId, setScoringJobId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [newlyScoredJobId, setNewlyScoredJobId] = useState<string | null>(null);
+  const [reviewId, setReviewId] = useState<string | null>(null);
+  const [artifactKinds, setArtifactKinds] = useState<Record<string, Set<string>>>({});
   const { toast } = useToast();
   const { profile, refreshCounts } = useLayoutContext();
   const [prefs, setPrefs] = useState<CandidatePreferences>(EMPTY_PREFERENCES);
+
+  const policy = useMemo(
+    () => ({ policy_strong: prefs.policy_strong, policy_review: prefs.policy_review }),
+    [prefs.policy_strong, prefs.policy_review]
+  );
 
   // Career profile drives dealbreakers and the score policy shown on cards.
   useEffect(() => {
@@ -63,6 +70,12 @@ const Inbox = () => {
       try {
         const jobsData = await fetchJobsByStatus("inbox");
         setJobs(jobsData);
+        const artifacts = await fetchArtifactsForJobs(jobsData.map((j) => j.id));
+        const map: Record<string, Set<string>> = {};
+        for (const a of artifacts) {
+          (map[a.job_id] ??= new Set()).add(a.artifact_type);
+        }
+        setArtifactKinds(map);
       } catch (error) {
         console.error("Error loading inbox:", error);
         toast({
@@ -76,6 +89,16 @@ const Inbox = () => {
     }
     loadData();
   }, [toast]);
+
+  // Sequential review flow works through assessed roles, best score first.
+  const reviewQueue = useMemo(
+    () =>
+      jobs
+        .filter((j) => !!j.match)
+        .sort((a, b) => (b.match?.match_score ?? 0) - (a.match?.match_score ?? 0)),
+    [jobs]
+  );
+
 
   const handleSearch = useCallback(async () => {
     if (!filters.keywords.trim()) {
