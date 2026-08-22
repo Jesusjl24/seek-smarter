@@ -10,6 +10,9 @@ import type {
   CoverLetter,
   ScrapedJob,
 } from "@/types/job";
+import { EMPTY_PREFERENCES, type CandidatePreferences } from "@/types/preferences";
+import { evaluateDealbreakers } from "@/lib/dealbreakers";
+import { bandLabel } from "@/lib/policy";
 
 const KEY = "seek-smarter:guest";
 
@@ -333,9 +336,49 @@ export function guestSaveMatch(match: Omit<JobMatch, "id" | "scored_at">): JobMa
   return full;
 }
 
+// ---- Guest preferences (local only) ----
+let guestPrefs: CandidatePreferences | null = null;
+
+function seedPreferences(): CandidatePreferences {
+  return {
+    ...EMPTY_PREFERENCES,
+    job_goals: "Senior product engineering role with real ownership of the frontend platform.",
+    career_direction: "Stay hands-on for two more years, then grow into staff-level scope.",
+    target_titles: ["Senior Product Engineer", "Senior Frontend Engineer"],
+    target_industries: ["SaaS", "Fintech"],
+    excluded_titles: ["Salesforce Admin"],
+    salary_min: 150000,
+    salary_target: 185000,
+    currency: "AUD",
+    locations: ["Sydney"],
+    work_arrangements: ["Remote", "Hybrid"],
+    work_types: ["Full time"],
+    mandatory_qualifications: [],
+    dealbreakers: [],
+    verified_experience:
+      "8 years TypeScript/React, two 0→1 SaaS launches, mentored a team of 4.",
+  };
+}
+
+export function guestFetchPreferences(): CandidatePreferences {
+  if (!guestPrefs) guestPrefs = seedPreferences();
+  return { ...guestPrefs };
+}
+
+export function guestSavePreferences(prefs: CandidatePreferences): CandidatePreferences {
+  guestPrefs = { ...prefs };
+  return { ...guestPrefs };
+}
+
 // Deterministic demo scoring based on job title vs profile
-export async function guestScoreJob(job: JobWithMatch): Promise<Omit<JobMatch, "id" | "scored_at" | "job_id" | "resume_profile_id">> {
+export async function guestScoreJob(
+  job: JobWithMatch,
+  prefs?: CandidatePreferences | null
+): Promise<Omit<JobMatch, "id" | "scored_at" | "job_id" | "resume_profile_id">> {
   await new Promise((r) => setTimeout(r, 450));
+  const effectivePrefs = prefs ?? guestFetchPreferences();
+  const dealbreaker_hits = evaluateDealbreakers(job, effectivePrefs);
+
   const t = job.title.toLowerCase();
   let score = 60;
   if (/senior|staff|lead|principal/.test(t)) score += 15;
@@ -343,28 +386,38 @@ export async function guestScoreJob(job: JobWithMatch): Promise<Omit<JobMatch, "
   if (/junior|intern|graduate|qa|admin|salesforce/.test(t)) score -= 30;
   if (/manager|director/.test(t)) score += 5;
   score = Math.max(15, Math.min(96, score));
+  // A dealbreaker caps the score below the Review band.
+  if (dealbreaker_hits.length > 0) {
+    score = Math.min(score, Math.max(0, effectivePrefs.policy_review - 1));
+  }
 
-  const recommendation = score >= 85 ? "Strong Apply" : score >= 70 ? "Apply" : score >= 50 ? "Cautious" : "Skip";
+  const recommendation = bandLabel(score, effectivePrefs);
+  const strong = score >= effectivePrefs.policy_strong;
   return {
     match_score: score,
     skill_match_percentage: Math.min(100, score + 5),
     recommendation,
     reasoning:
-      score >= 70
-        ? "Core stack (TypeScript, React, Node) aligns with the JD; seniority matches profile."
-        : "Limited overlap between the JD focus and the strongest parts of the profile.",
-    pros:
-      score >= 70
-        ? ["Core stack aligns", "Seniority match", "Product-focused engineering background"]
-        : ["Some transferable experience"],
-    cons: score >= 70 ? ["Domain (fintech/industry) may need ramp-up"] : ["Different specialisation", "Junior/adjacent role"],
+      dealbreaker_hits.length > 0
+        ? `Deprioritised on your own constraints: ${dealbreaker_hits[0]}.`
+        : strong
+          ? "Core stack (TypeScript, React, Node) aligns with the JD; seniority matches profile."
+          : "Partial overlap between the JD focus and the strongest parts of the profile.",
+    pros: strong
+      ? ["Core stack aligns", "Seniority match", "Product-focused engineering background"]
+      : ["Some transferable experience"],
+    cons: strong ? ["Domain (fintech/industry) may need ramp-up"] : ["Different specialisation"],
     gaps: ["No direct experience in the exact tooling stack mentioned"],
+    concerns: strong ? [] : ["Seniority signal in the listing is ambiguous"],
+    dealbreaker_hits,
     strategic_advice:
-      score >= 60
-        ? "Lead the resume summary with product impact and TypeScript depth."
-        : "Skip unless you want breadth; a stronger match is likely.",
+      dealbreaker_hits.length > 0
+        ? "Only pursue if you are willing to relax the constraint above."
+        : strong
+          ? "Lead the resume summary with product impact and TypeScript depth."
+          : "Worth a look, but a stronger match is likely elsewhere.",
     agent: "job_match_scorer",
-    agent_version: "1.0-demo",
+    agent_version: "1.1-demo",
   };
 }
 

@@ -81,6 +81,10 @@ export interface JobMatch {
   agent_version?: string;
   veto_reasons?: string[];
   scores?: RubricScores;
+  /** Deterministic preference violations, computed before any model call. */
+  dealbreaker_hits?: string[];
+  /** Soft concerns raised by the scoring agent (not dealbreakers). */
+  concerns?: string[];
 }
 
 // Tailored resume artifact from resume_tailor agent
