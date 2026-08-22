@@ -14,6 +14,123 @@ export type Database = {
   }
   public: {
     Tables: {
+      agent_credentials: {
+        Row: {
+          agent_id: string
+          created_at: string
+          expires_at: string
+          id: string
+          key_id: string
+          last_used_at: string | null
+          owner_user_id: string
+          revoked_at: string | null
+          scopes: string[]
+          secret_hash: string
+        }
+        Insert: {
+          agent_id: string
+          created_at?: string
+          expires_at?: string
+          id?: string
+          key_id: string
+          last_used_at?: string | null
+          owner_user_id?: string
+          revoked_at?: string | null
+          scopes?: string[]
+          secret_hash: string
+        }
+        Update: {
+          agent_id?: string
+          created_at?: string
+          expires_at?: string
+          id?: string
+          key_id?: string
+          last_used_at?: string | null
+          owner_user_id?: string
+          revoked_at?: string | null
+          scopes?: string[]
+          secret_hash?: string
+        }
+        Relationships: []
+      }
+      agent_nonces: {
+        Row: {
+          key_id: string
+          nonce: string
+          seen_at: string
+        }
+        Insert: {
+          key_id: string
+          nonce: string
+          seen_at?: string
+        }
+        Update: {
+          key_id?: string
+          nonce?: string
+          seen_at?: string
+        }
+        Relationships: []
+      }
+      agent_request_log: {
+        Row: {
+          agent_id: string
+          created_at: string
+          id: string
+          idempotency_key: string
+          owner_user_id: string
+          request_id: string | null
+          response_json: Json
+          route: string
+          status_code: number
+        }
+        Insert: {
+          agent_id: string
+          created_at?: string
+          id?: string
+          idempotency_key: string
+          owner_user_id: string
+          request_id?: string | null
+          response_json: Json
+          route: string
+          status_code: number
+        }
+        Update: {
+          agent_id?: string
+          created_at?: string
+          id?: string
+          idempotency_key?: string
+          owner_user_id?: string
+          request_id?: string | null
+          response_json?: Json
+          route?: string
+          status_code?: number
+        }
+        Relationships: []
+      }
+      agent_usage: {
+        Row: {
+          agent_id: string
+          day_count: number
+          day_start: string
+          minute_count: number
+          window_start: string
+        }
+        Insert: {
+          agent_id: string
+          day_count?: number
+          day_start: string
+          minute_count?: number
+          window_start: string
+        }
+        Update: {
+          agent_id?: string
+          day_count?: number
+          day_start?: string
+          minute_count?: number
+          window_start?: string
+        }
+        Relationships: []
+      }
       application_events: {
         Row: {
           created_at: string
@@ -345,6 +462,13 @@ export type Database = {
             referencedColumns: ["id", "user_id"]
           },
           {
+            foreignKeyName: "assistant_tasks_job_revision_fkey"
+            columns: ["job_revision_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "job_revisions"
+            referencedColumns: ["id", "user_id"]
+          },
+          {
             foreignKeyName: "assistant_tasks_resume_revision_id_user_id_fkey"
             columns: ["resume_revision_id", "user_id"]
             isOneToOne: false
@@ -655,6 +779,74 @@ export type Database = {
             columns: ["resume_profile_id", "user_id"]
             isOneToOne: false
             referencedRelation: "resume_profile"
+            referencedColumns: ["id", "user_id"]
+          },
+        ]
+      }
+      job_revisions: {
+        Row: {
+          company: string
+          content_hash: string
+          created_at: string
+          date_posted: string | null
+          description: string
+          id: string
+          job_id: string
+          location: string | null
+          provider: string
+          provider_external_id: string | null
+          revision_number: number
+          salary_range: string | null
+          source_url: string
+          title: string
+          user_id: string
+          work_arrangement: string | null
+          work_type: string | null
+        }
+        Insert: {
+          company: string
+          content_hash: string
+          created_at?: string
+          date_posted?: string | null
+          description: string
+          id?: string
+          job_id: string
+          location?: string | null
+          provider?: string
+          provider_external_id?: string | null
+          revision_number?: number
+          salary_range?: string | null
+          source_url: string
+          title: string
+          user_id?: string
+          work_arrangement?: string | null
+          work_type?: string | null
+        }
+        Update: {
+          company?: string
+          content_hash?: string
+          created_at?: string
+          date_posted?: string | null
+          description?: string
+          id?: string
+          job_id?: string
+          location?: string | null
+          provider?: string
+          provider_external_id?: string | null
+          revision_number?: number
+          salary_range?: string | null
+          source_url?: string
+          title?: string
+          user_id?: string
+          work_arrangement?: string | null
+          work_type?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "job_revisions_job_id_user_id_fkey"
+            columns: ["job_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "jobs"
             referencedColumns: ["id", "user_id"]
           },
         ]
