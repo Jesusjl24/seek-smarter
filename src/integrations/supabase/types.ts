@@ -179,11 +179,13 @@ export type Database = {
         Row: {
           approved_at: string | null
           checklist: Json
+          cover_letter_content_hash: string | null
           cover_letter_document_revision_id: string | null
           created_at: string
           id: string
           job_id: string
           package_hash: string
+          resume_content_hash: string | null
           resume_document_revision_id: string | null
           status: string
           updated_at: string
@@ -192,11 +194,13 @@ export type Database = {
         Insert: {
           approved_at?: string | null
           checklist?: Json
+          cover_letter_content_hash?: string | null
           cover_letter_document_revision_id?: string | null
           created_at?: string
           id?: string
           job_id: string
           package_hash: string
+          resume_content_hash?: string | null
           resume_document_revision_id?: string | null
           status?: string
           updated_at?: string
@@ -205,11 +209,13 @@ export type Database = {
         Update: {
           approved_at?: string | null
           checklist?: Json
+          cover_letter_content_hash?: string | null
           cover_letter_document_revision_id?: string | null
           created_at?: string
           id?: string
           job_id?: string
           package_hash?: string
+          resume_content_hash?: string | null
           resume_document_revision_id?: string | null
           status?: string
           updated_at?: string
@@ -593,47 +599,68 @@ export type Database = {
       }
       document_revisions: {
         Row: {
+          agent_version: string
           approval_status: string
           content: Json
           content_hash: string
           created_at: string
           document_type: string
+          docx_path: string | null
+          generated_at: string
           id: string
           job_id: string | null
+          label: string | null
+          pdf_path: string | null
           revision_number: number
           source_resume_revision_id: string | null
           storage_path: string | null
           supersedes_revision_id: string | null
+          supporting_fact_ids: string[]
+          truth_check: Json
           truth_check_status: string
           user_id: string
         }
         Insert: {
+          agent_version?: string
           approval_status?: string
           content?: Json
           content_hash: string
           created_at?: string
           document_type: string
+          docx_path?: string | null
+          generated_at?: string
           id?: string
           job_id?: string | null
+          label?: string | null
+          pdf_path?: string | null
           revision_number: number
           source_resume_revision_id?: string | null
           storage_path?: string | null
           supersedes_revision_id?: string | null
+          supporting_fact_ids?: string[]
+          truth_check?: Json
           truth_check_status?: string
           user_id?: string
         }
         Update: {
+          agent_version?: string
           approval_status?: string
           content?: Json
           content_hash?: string
           created_at?: string
           document_type?: string
+          docx_path?: string | null
+          generated_at?: string
           id?: string
           job_id?: string | null
+          label?: string | null
+          pdf_path?: string | null
           revision_number?: number
           source_resume_revision_id?: string | null
           storage_path?: string | null
           supersedes_revision_id?: string | null
+          supporting_fact_ids?: string[]
+          truth_check?: Json
           truth_check_status?: string
           user_id?: string
         }
