@@ -8,6 +8,8 @@ import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { isGuest, guestScoreJob } from "@/lib/guest";
+import { fetchPreferences } from "@/lib/api/preferences";
+import { EMPTY_PREFERENCES, type CandidatePreferences } from "@/types/preferences";
 import {
   fetchJobsByStatus,
   upsertJobs,
@@ -42,6 +44,14 @@ const Inbox = () => {
   const [newlyScoredJobId, setNewlyScoredJobId] = useState<string | null>(null);
   const { toast } = useToast();
   const { profile, refreshCounts } = useLayoutContext();
+  const [prefs, setPrefs] = useState<CandidatePreferences>(EMPTY_PREFERENCES);
+
+  // Career profile drives dealbreakers and the score policy shown on cards.
+  useEffect(() => {
+    fetchPreferences()
+      .then(setPrefs)
+      .catch((e) => console.error("Failed to load preferences:", e));
+  }, []);
 
   // Load inbox jobs
   useEffect(() => {
@@ -338,7 +348,7 @@ const Inbox = () => {
       title: "Batch scoring complete",
       description: `Scored ${scored} job${scored === 1 ? "" : "s"}${failed > 0 ? `, ${failed} failed` : ""}. Nothing was moved automatically.`,
     });
-  }, [jobs, profile, toast, refreshCounts]);
+  }, [jobs, profile, prefs, toast, refreshCounts]);
 
   const handleDeleteJob = useCallback(
     async (jobId: string) => {
