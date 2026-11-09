@@ -83,6 +83,13 @@ const Today = () => {
       toast({ title: "Could not move that role", variant: "destructive" });
     }
   };
+  const restore = async (jobId: string) => {
+    try {
+      await updateJobStatus(jobId, "inbox");
+      await Promise.all([load(), refreshCounts()]);
+      toast({ title: "Role restored to Inbox" });
+    } catch { toast({ title: "Could not restore that role", variant: "destructive" }); }
+  };
   const runPipeline = async () => {
     setRunning(true);
     try { const result = await runSavedSearchesNow(); toast({ title: "Saved searches finished", description: `${result.totals} profile${result.totals === 1 ? "" : "s"} processed.` }); await load(); }
@@ -137,37 +144,31 @@ const Today = () => {
 
       <PolicyBar policy={policy} onChange={handlePolicyChange} compact />
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-        <StatTile testId="today-stat-found" label="Jobs found" value={snapshot.jobs_found} />
-        <StatTile
-          testId="today-stat-assessed"
-          label="Jobs assessed"
-          value={snapshot.jobs_assessed}
-          hint={`${Math.max(snapshot.jobs_found - snapshot.jobs_assessed, 0)} pending`}
-        />
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <StatTile testId="today-stat-new" label="New this run" value={snapshot.jobs_new} />
         <StatTile
           testId="today-stat-strong"
-          label={`Strong Apply (${policy.policy_strong}+)`}
+          label="Strong"
           value={snapshot.strong_apply}
           tone="success"
         />
         <StatTile
           testId="today-stat-review"
-          label={`Review (${policy.policy_review}–${policy.policy_strong - 1})`}
+          label="Review"
           value={snapshot.review}
           tone="warning"
         />
         <StatTile
-          testId="today-stat-deprioritise"
-          label={`Deprioritise (<${policy.policy_review})`}
-          value={snapshot.deprioritise}
+          testId="today-stat-hidden"
+          label="Hidden (auto)"
+          value={snapshot.hidden_auto_count}
           tone="muted"
         />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
         <SectionPanel testId="today-aligned" title="Aligned roles" description="New graded roles from the latest search window." count={snapshot.incoming.length} isEmpty={snapshot.incoming.length === 0} emptyMessage="No new aligned roles yet.">
-          <ul className="divide-y">{snapshot.incoming.slice(0, 8).map((job) => <li key={job.job_id} className="py-2"><div className="flex gap-2"><span className="rounded bg-primary/10 px-2 py-0.5 text-sm font-semibold text-primary">{job.grade}</span><div className="min-w-0"><p className="truncate text-sm font-medium">{job.title} · {job.company}</p><p className="line-clamp-2 text-xs text-muted-foreground">{job.why_apply || job.band_label}</p></div><span className="ml-auto text-sm tabular-nums">{job.score}</span></div></li>)}</ul>
+          <ul className="divide-y">{snapshot.incoming.slice(0, 8).map((job) => <li key={job.job_id} className="py-2"><div className="flex gap-2"><span className="rounded bg-primary/10 px-2 py-0.5 text-sm font-semibold text-primary">{job.grade}</span><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{job.title} · {job.company}</p><p className="line-clamp-2 text-xs text-muted-foreground">{job.why_apply || job.band_label}</p>{job.risks && <p className="mt-1 line-clamp-1 text-xs text-warning">Risk: {job.risks}</p>}{(job.has_resume_draft || job.has_cover_letter_draft) && <Button asChild variant="link" size="sm" className="h-auto p-0 text-xs"><Link to="/documents">Review {job.has_resume_draft && job.has_cover_letter_draft ? "drafts" : "draft"}</Link></Button>}</div><span className="ml-auto text-sm tabular-nums">{job.score}</span></div></li>)}</ul>
         </SectionPanel>
         <SectionPanel
           testId="today-questions"
@@ -299,6 +300,11 @@ const Today = () => {
           </ul>
         </SectionPanel>
       </div>
+
+      <SectionPanel testId="today-auto-hidden" title="Auto-hidden low-fit" description="Low-fit roles hidden by your scoring policy. Restore any role for manual review." count={snapshot.hidden_auto_count} isEmpty={snapshot.hidden_auto_count === 0} emptyMessage="No roles were auto-hidden.">
+        <ul className="divide-y">{snapshot.hidden_auto.map((job) => <li key={job.id} className="flex items-center gap-3 py-2"><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{job.title}</p><p className="truncate text-xs text-muted-foreground">{job.company} · {job.grade || "–"} · {job.score}</p></div><Button size="sm" variant="outline" onClick={() => restore(job.id)}>Restore</Button></li>)}</ul>
+        <Button asChild variant="link" size="sm" className="px-0"><Link to="/not-a-fit">View all not a fit</Link></Button>
+      </SectionPanel>
 
       <SectionPanel
         testId="today-telegram"

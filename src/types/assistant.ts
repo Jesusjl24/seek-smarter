@@ -58,12 +58,17 @@ export interface AssistantSnapshot {
   /** Timestamp of the most recent ingestion run, if any. */
   last_run_at: string | null;
   jobs_found: number;
+  /** Jobs discovered in the latest run window. */
+  new_since_last_run: number;
+  jobs_new: number;
   jobs_assessed: number;
   strong_apply: number;
   review: number;
   deprioritise: number;
   questions: AssistantQuestion[];
-  incoming: Array<{ job_id: string; title: string; company: string; score: number; grade: "A" | "B" | "C" | "D"; why_apply: string; band_label: string }>;
+  incoming: Array<{ job_id: string; title: string; company: string; score: number; grade: "A" | "B" | "C" | "D"; why_apply: string; risks: string; band_label: string; has_resume_draft: boolean; has_cover_letter_draft: boolean }>;
+  hidden_auto_count: number;
+  hidden_auto: Array<{ id: string; title: string; company: string; score: number; grade: "A" | "B" | "C" | "D" | null }>;
   documents_ready: AssistantDocument[];
   packages_ready: AssistantPackage[];
   telegram: TelegramActivity;

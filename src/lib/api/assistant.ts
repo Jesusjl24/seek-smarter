@@ -4,6 +4,7 @@
 import { fetchJobs, fetchArtifactsForJobs } from "@/lib/api/jobs";
 import { fetchResumeProfile } from "@/lib/api/resume";
 import { fetchPreferences } from "@/lib/api/preferences";
+import { supabase } from "@/integrations/supabase/client";
 import { classifyScore, BAND_LABELS } from "@/lib/policy";
 import type { ScorePolicy } from "@/types/preferences";
 import type { JobArtifact, JobWithMatch } from "@/types/job";
@@ -36,10 +37,11 @@ export function latestRunJobs(jobs: JobWithMatch[]): {
 export function buildAssistantSnapshot(params: {
   jobs: JobWithMatch[];
   artifacts: JobArtifact[];
+  documentRevisions?: Array<{ job_id: string | null; document_type: string; approval_status: string }>;
   policy: ScorePolicy;
   hasResume: boolean;
 }): AssistantSnapshot {
-  const { jobs, artifacts, policy, hasResume } = params;
+  const { jobs, artifacts, documentRevisions = [], policy, hasResume } = params;
   const { runJobs, lastRunAt } = latestRunJobs(jobs);
   const byJob = new Map<string, JobWithMatch>(jobs.map((j) => [j.id, j]));
 
@@ -49,6 +51,18 @@ export function buildAssistantSnapshot(params: {
   let deprioritise = 0;
   const questions: AssistantQuestion[] = [];
   const incoming: AssistantSnapshot["incoming"] = [];
+  const draftKinds = new Map<string, Set<string>>();
+  for (const artifact of artifacts) {
+    const set = draftKinds.get(artifact.job_id) ?? new Set<string>();
+    set.add(artifact.artifact_type);
+    draftKinds.set(artifact.job_id, set);
+  }
+  for (const revision of documentRevisions) {
+    if (!revision.job_id || !["pending", "approved"].includes(revision.approval_status)) continue;
+    const set = draftKinds.get(revision.job_id) ?? new Set<string>();
+    set.add(revision.document_type === "resume" ? "tailored_resume" : "cover_letter");
+    draftKinds.set(revision.job_id, set);
+  }
 
   for (const job of assessed) {
     const score = job.match!.match_score;
@@ -72,7 +86,8 @@ export function buildAssistantSnapshot(params: {
       });
     }
     if ((job.pipeline_status === "inbox" || job.pipeline_status === "shortlist") && job.match?.grade) {
-      incoming.push({ job_id: job.id, title: job.title, company: job.company, score, grade: job.match.grade, why_apply: job.match.why_apply || job.match.strategic_advice || job.match.reasoning || "", band_label: BAND_LABELS[band] });
+      const drafts = draftKinds.get(job.id);
+      incoming.push({ job_id: job.id, title: job.title, company: job.company, score, grade: job.match.grade, why_apply: job.match.why_apply || job.match.strategic_advice || job.match.reasoning || "", risks: job.match.risks || (job.match.cons ?? []).join("; "), band_label: BAND_LABELS[band], has_resume_draft: drafts?.has("tailored_resume") ?? false, has_cover_letter_draft: drafts?.has("cover_letter") ?? false });
     }
   }
 
@@ -129,18 +144,23 @@ export function buildAssistantSnapshot(params: {
           action: "score" as const,
         }))
     : [];
+  const hiddenAutoJobs = jobs.filter((job) => job.pipeline_status === "not_fit" && job.triage_source === "auto");
 
   return {
     assistant_connected: false,
     status: lastRunAt ? "completed" : "never_run",
     last_run_at: lastRunAt,
     jobs_found: runJobs.length,
+    new_since_last_run: runJobs.length,
+    jobs_new: runJobs.length,
     jobs_assessed: assessed.length,
     strong_apply: strong,
     review,
     deprioritise,
     questions,
     incoming: incoming.sort((a, b) => b.score - a.score),
+    hidden_auto_count: hiddenAutoJobs.length,
+    hidden_auto: hiddenAutoJobs.slice(0, 5).map((job) => ({ id: job.id, title: job.title, company: job.company, score: job.match?.match_score ?? 0, grade: job.match?.grade ?? null })),
     documents_ready,
     packages_ready,
     // Telegram is not wired up yet — report that honestly rather than faking activity.
@@ -157,9 +177,12 @@ export async function fetchAssistantSnapshot(): Promise<AssistantSnapshot> {
     fetchPreferences(),
   ]);
   const artifacts = await fetchArtifactsForJobs(jobs.map((j) => j.id));
+  const { data: documentRevisions, error } = jobs.length ? await supabase.from("document_revisions").select("job_id,document_type,approval_status").in("job_id", jobs.map((job) => job.id)).in("approval_status", ["pending", "approved"]) : { data: [], error: null };
+  if (error) throw error;
   return buildAssistantSnapshot({
     jobs,
     artifacts,
+    documentRevisions: documentRevisions ?? [],
     policy: { policy_strong: prefs.policy_strong, policy_review: prefs.policy_review },
     hasResume: !!profile,
   });

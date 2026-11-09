@@ -2,22 +2,23 @@
 
 ## Architecture
 
-Active `search_profiles` are processed by `run-job-pipeline`. Each owner-scoped run is recorded in `pipeline_runs`; SEEK links are discovered through Firecrawl (search-page scrape + job-id extraction; titles may be enriched later) and deduplicated by `(user_id, seek_job_id)`. New/unscored jobs are evaluated with the saved resume and `candidate_preferences` through the Lovable AI gateway (`google/gemini-3-flash-preview`). The server assigns an A–D grade and `why_apply` text.
+Active `search_profiles` are processed by `run-job-pipeline`. Each owner-scoped run is recorded in `pipeline_runs`; SEEK links are discovered through Firecrawl, then up to eight incomplete listings per profile run are enriched from their detail pages before scoring. Real JD text is retained for scoring and drafting, and jobs are deduplicated by `(user_id, seek_job_id)`.
 
-Jobs below the user's review threshold are moved to `not_fit` with `triage_source=auto` and an `auto_hidden_at` timestamp. A-grade matches enqueue pending `tailor_resume` and `cover_letter` assistant tasks. These are drafts only: the existing document flow keeps `approval_status=pending`, and the pipeline never applies or submits.
+Jobs below the user's review threshold are moved to `not_fit` with `triage_source=auto` and an `auto_hidden_at` timestamp. For up to three A-grade jobs per run, the pipeline creates a tailored resume and cover-letter artifact plus immutable `document_revisions` with pending truth/approval status. Successful tasks are marked `succeeded`; failed generations remain pending for retry. These are drafts only: the pipeline never approves, applies, or submits.
 
 The Today page shows graded inbox/shortlist jobs and can manually run the signed-in user's active profiles. Settings provides minimal saved-search creation and activation controls. Telegram remains disconnected.
 
 ## Lovable deployment steps
 
-GitHub sync does **not** apply database migrations or redeploy Edge Functions. In Lovable chat / SQL editor:
+GitHub sync does **not** redeploy Edge Functions. In Lovable:
 
-1. Apply `supabase/migrations/20261110013000_job_agent_pipeline.sql`.
-2. Deploy `run-job-pipeline`, `score-job`, and `agent-api`.
-3. Set `CRON_SECRET`; confirm `FIRECRAWL_API_KEY` and `LOVABLE_API_KEY` already exist.
-4. Schedule an hourly `POST /functions/v1/run-job-pipeline` with `x-cron-secret: <CRON_SECRET>`. If `pg_cron` or `pg_net` is unavailable, use an external scheduler. Do not put this secret in browser code.
-
-`scrape-seek` does not need redeployment for this implementation because the pipeline uses its own small Firecrawl discovery call.
+1. Sync/push this branch to GitHub (the user does this step).
+2. No new phase-2 migration was added. Apply any earlier unapplied migration, including `supabase/migrations/20261110013000_job_agent_pipeline.sql`.
+3. Force-redeploy `run-job-pipeline`, `scrape-seek`, `score-job`, `tailor-resume`, `generate-cover-letter`, and `agent-api` (`generate-document` too if that flow is enabled).
+4. Confirm secrets `FIRECRAWL_API_KEY`, `LOVABLE_API_KEY`, and `CRON_SECRET`.
+5. Schedule an hourly `POST /functions/v1/run-job-pipeline` with `x-cron-secret: <CRON_SECRET>`. Never put the secret in browser code.
+6. Create/activate a saved search and ensure a master resume is uploaded.
+7. Issue an agent credential with `matches:read` using the SQL below.
 
 ## Grok Bot matches poll
 
@@ -56,4 +57,4 @@ The response is `{ schema_version, matches, next_since }`. Poll again using `nex
 
 ## Restore an auto-hidden job
 
-Open **Not a Fit** and move the job back to **Inbox**. This clears `auto_hidden_at` and changes `triage_source` to `manual`, so the decision remains recoverable and visible.
+Use **Restore** in Today's **Auto-hidden low-fit** section, or open **Not a Fit** and move the job back to **Inbox**. This clears `auto_hidden_at` and changes `triage_source` to `manual`.
