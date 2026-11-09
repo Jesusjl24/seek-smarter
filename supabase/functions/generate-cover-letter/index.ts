@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { requireUser, UnauthorizedError, loadPreferences } from "../_shared/auth.ts";
 import { corsFor, originRejected, preflight } from "../_shared/cors.ts";
 import { enforceRateLimit, readJsonBody, RateLimitError, PayloadTooLargeError } from "../_shared/ratelimit.ts";
+import { DraftGenerationError, generateCoverLetterDraft } from "../_shared/tailorDrafts.ts";
 
 let corsHeaders: Record<string, string> = {};
 
@@ -73,171 +74,9 @@ serve(async (req) => {
       throw new Error('LOVABLE_API_KEY is not configured');
     }
 
-    const jobDescription = job.full_description || job.description_snippet;
-
-    const systemPrompt = `You are an expert career consultant specializing in Australian professional cover letters.
-Your role is to write professional, concise, and role-specific cover letters.
-
-CRITICAL RULES:
-- Write in Australian English (favour, colour, organisation, etc.)
-- Be CONCISE - Australian recruiters prefer direct communication
-- NO FLUFF - every sentence must add value
-- NEVER fabricate claims or experience
-- Use confident but grounded tone
-- Focus on what the candidate brings to the role
-- Address specific job requirements`;
-
-    const highlightsSection = tailored_highlights?.length 
-      ? `\nKEY HIGHLIGHTS TO EMPHASIZE:\n${tailored_highlights.map(h => `- ${h}`).join('\n')}`
-      : '';
-
     const prefs = await loadPreferences(user.id);
-    const prefsBlock = prefs
-      ? `CANDIDATE CONSTRAINTS AND GOALS (respect these; never contradict them):
-- Job goals: ${prefs.job_goals || 'Not specified'}
-- Career direction: ${prefs.career_direction || 'Not specified'}
-- Target titles: ${(prefs.target_titles ?? []).join(', ') || 'Not specified'}
-- Verified experience (the ONLY claims you may present as proven): ${prefs.verified_experience || 'Not specified'}
-- Never invent experience, employers, metrics, or qualifications beyond the resume and the verified experience above.`
-      : 'CANDIDATE CONSTRAINTS: none saved. Use only what the resume states; invent nothing.';
-
-    const prompt = `${prefsBlock}
-
-Write a professional Australian-style cover letter for this job application.
-
-CANDIDATE PROFILE:
-- Technical Skills: ${profile.skills_technical.join(', ') || 'None specified'}
-- Soft Skills: ${profile.skills_soft.join(', ') || 'None specified'}
-- Years of Experience: ${profile.years_experience ?? 'Not specified'}
-- Education: ${profile.education.join(', ') || 'None specified'}
-- Certifications: ${profile.certifications.join(', ') || 'None'}
-- Previous Roles: ${profile.previous_titles.join(', ') || 'None specified'}
-- Industries: ${profile.industries.join(', ') || 'Not specified'}
-- Summary: ${profile.summary || 'Not provided'}
-${highlightsSection}
-
-TARGET JOB:
-- Title: ${job.title}
-- Company: ${job.company}
-- Location: ${job.location}
-- Description: ${jobDescription}
-
-COVER LETTER STRUCTURE:
-1. Opening: Express interest and mention where you found the role
-2. Body (2-3 paragraphs): Connect your experience to their requirements
-3. Closing: Call to action, availability for interview
-
-Return a JSON object with these EXACT fields:
-{
-  "agent_meta": {
-    "agent": "${AGENT_NAME}",
-    "version": "${AGENT_VERSION}"
-  },
-  "target_role": {
-    "title": "${job.title}",
-    "company": "${job.company}"
-  },
-  "cover_letter": "Full cover letter text with proper paragraphs. Use \\n\\n for paragraph breaks.",
-  "key_points_used": ["point1", "point2", "point3"],
-  "suggested_subject_lines": [
-    "Application for ${job.title} - [Your Name]",
-    "Experienced [Role] Seeking ${job.title} Opportunity"
-  ],
-  "final_checklist": [
-    "Tailored to role",
-    "Matches JD language",
-    "No fabricated claims",
-    "Australian English",
-    "Concise and direct"
-  ]
-}
-
-Write a compelling 250-350 word cover letter. Return ONLY the JSON object.`;
-
-    console.log(`[${AGENT_NAME} v${AGENT_VERSION}] Generating cover letter for: ${job.title} at ${job.company}`);
-
-    const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'google/gemini-3-flash-preview',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: prompt }
-        ],
-        temperature: 0.5,
-      }),
-    });
-
-    if (!aiResponse.ok) {
-      if (aiResponse.status === 429) {
-        return new Response(
-          JSON.stringify({ error: 'Rate limit exceeded. Please try again in a moment.' }),
-          { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-      if (aiResponse.status === 402) {
-        return new Response(
-          JSON.stringify({ error: 'AI credits exhausted. Please add credits to continue.' }),
-          { status: 402, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-      const errorText = await aiResponse.text();
-      console.error('AI API error:', aiResponse.status, errorText);
-      throw new Error('AI cover letter generation failed');
-    }
-
-    const aiData = await aiResponse.json();
-    const content = aiData.choices?.[0]?.message?.content;
-
-    if (!content) {
-      throw new Error('No response from AI');
-    }
-
-    // Parse the JSON response
-    let result;
-    try {
-      const cleanedContent = content.replace(/```json\n?|\n?```/g, '').trim();
-      const jsonMatch = cleanedContent.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        result = JSON.parse(jsonMatch[0]);
-      } else {
-        result = JSON.parse(cleanedContent);
-      }
-    } catch (parseError) {
-      console.error('Failed to parse AI response:', content);
-      throw new Error('Failed to parse cover letter data');
-    }
-
-    // Normalize the response
-    const coverLetter = {
-      agent_meta: {
-        agent: AGENT_NAME,
-        version: AGENT_VERSION,
-      },
-      target_role: {
-        title: job.title,
-        company: job.company,
-      },
-      cover_letter: result.cover_letter || '',
-      key_points_used: Array.isArray(result.key_points_used) ? result.key_points_used : [],
-      suggested_subject_lines: Array.isArray(result.suggested_subject_lines) ? result.suggested_subject_lines : [],
-      final_checklist: Array.isArray(result.final_checklist) ? result.final_checklist : [
-        'Tailored to role',
-        'Matches JD language',
-        'No fabricated claims',
-      ],
-    };
-
-    console.log(`[${AGENT_NAME} v${AGENT_VERSION}] Generated cover letter with ${coverLetter.key_points_used.length} key points`);
-
-    return new Response(
-      JSON.stringify(coverLetter),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    const coverLetter = await generateCoverLetterDraft({ job, profile, prefs, matchScore: match_score, apiKey: LOVABLE_API_KEY, tailoredHighlights: tailored_highlights });
+    return new Response(JSON.stringify(coverLetter), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   } catch (error) {
     if (error instanceof UnauthorizedError) {
       return new Response(JSON.stringify({ error: error.message }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
@@ -247,6 +86,9 @@ Write a compelling 250-350 word cover letter. Return ONLY the JSON object.`;
     }
     if (error instanceof PayloadTooLargeError) {
       return new Response(JSON.stringify({ error: error.message }), { status: 413, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+    if (error instanceof DraftGenerationError) {
+      return new Response(JSON.stringify({ error: error.message }), { status: error.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
     console.error('Error generating cover letter:', error);
     const errorMessage = error instanceof Error ? error.message : 'Failed to generate cover letter';
