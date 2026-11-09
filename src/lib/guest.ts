@@ -11,6 +11,7 @@ import type {
   ScrapedJob,
 } from "@/types/job";
 import { EMPTY_PREFERENCES, type CandidatePreferences } from "@/types/preferences";
+import { gradeForScore, whyApply } from "@/lib/grade";
 import { evaluateDealbreakers } from "@/lib/dealbreakers";
 import { bandLabel } from "@/lib/policy";
 
@@ -490,6 +491,21 @@ export async function guestScoreJob(
           : "Worth a look, but a stronger match is likely elsewhere.",
     agent: "job_match_scorer",
     agent_version: "1.1-demo",
+    grade: gradeForScore(score, effectivePrefs),
+    why_apply: whyApply({
+      strategic_advice:
+        dealbreaker_hits.length > 0
+          ? "Only pursue if you are willing to relax the constraint above."
+          : strong
+            ? "Lead the resume summary with product impact and TypeScript depth."
+            : "Worth a look, but a stronger match is likely elsewhere.",
+      reasoning:
+        dealbreaker_hits.length > 0
+          ? `Deprioritised on your own constraints: ${dealbreaker_hits[0]}.`
+          : strong
+            ? "Core stack (TypeScript, React, Node) aligns with the JD; seniority matches profile."
+            : "Partial overlap between the JD focus and the strongest parts of the profile.",
+    }),
   };
 }
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { gradeForScore, whyApply } from "../../supabase/functions/_shared/grade";
+import { gradeForScore, whyApply } from "@/lib/grade";
 
 describe("job-agent grade policy", () => {
   const policy = { policy_strong: 80, policy_review: 60 };

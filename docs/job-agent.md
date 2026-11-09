@@ -2,7 +2,7 @@
 
 ## Architecture
 
-Active `search_profiles` are processed by `run-job-pipeline`. Each owner-scoped run is recorded in `pipeline_runs`; SEEK links are discovered through Firecrawl and deduplicated by `(user_id, seek_job_id)`. New/unscored jobs are evaluated with the saved resume and `candidate_preferences` through the Lovable AI gateway (`google/gemini-3-flash-preview`). The server assigns an A–D grade and `why_apply` text.
+Active `search_profiles` are processed by `run-job-pipeline`. Each owner-scoped run is recorded in `pipeline_runs`; SEEK links are discovered through Firecrawl (search-page scrape + job-id extraction; titles may be enriched later) and deduplicated by `(user_id, seek_job_id)`. New/unscored jobs are evaluated with the saved resume and `candidate_preferences` through the Lovable AI gateway (`google/gemini-3-flash-preview`). The server assigns an A–D grade and `why_apply` text.
 
 Jobs below the user's review threshold are moved to `not_fit` with `triage_source=auto` and an `auto_hidden_at` timestamp. A-grade matches enqueue pending `tailor_resume` and `cover_letter` assistant tasks. These are drafts only: the existing document flow keeps `approval_status=pending`, and the pipeline never applies or submits.
 
@@ -35,7 +35,7 @@ The signing key used by the bot is `sha256(RANDOM_SECRET)` in lowercase hex. For
 
 ```text
 body_hash = sha256("")
-canonical = "GET\n/functions/v1/agent-api/v1/matches\n<TIMESTAMP>\n<NONCE>\n<BODY_HASH>"
+canonical = "GET\n/agent-api/v1/matches\n<TIMESTAMP>\n<NONCE>\n<BODY_HASH>"
 signature = hmac_sha256_hex(sha256_hex(RANDOM_SECRET), canonical)
 ```
 

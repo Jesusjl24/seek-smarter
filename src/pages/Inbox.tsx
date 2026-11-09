@@ -240,6 +240,8 @@ const Inbox = () => {
           strategic_advice: data.strategic_advice,
           dealbreaker_hits: data.dealbreaker_hits ?? [],
           concerns: data.concerns ?? [],
+          grade: data.grade,
+          why_apply: data.why_apply,
         });
 
         // Scoring never moves a job on its own — you decide where it goes.
@@ -341,6 +343,8 @@ const Inbox = () => {
           strategic_advice: data.strategic_advice,
           dealbreaker_hits: data.dealbreaker_hits ?? [],
           concerns: data.concerns ?? [],
+          grade: data.grade,
+          why_apply: data.why_apply,
         });
 
         setJobs((prev) =>

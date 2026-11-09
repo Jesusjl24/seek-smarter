@@ -31,22 +31,47 @@ async function scrapeSeek(keywords: string, location: string): Promise<ScrapedJo
   const seekUrl = new URL("https://www.seek.com.au/jobs");
   seekUrl.searchParams.set("keywords", keywords);
   if (location) seekUrl.searchParams.set("where", location);
-  const res = await fetch("https://api.firecrawl.dev/v1/map", {
-    method: "POST", headers: { authorization: `Bearer ${key}`, "content-type": "application/json" },
-    body: JSON.stringify({ url: seekUrl.toString(), search: keywords, limit: 15, includeSubdomains: false }),
+  const res = await fetch("https://api.firecrawl.dev/v1/scrape", {
+    method: "POST",
+    headers: { authorization: `Bearer ${key}`, "content-type": "application/json" },
+    body: JSON.stringify({
+      url: seekUrl.toString(),
+      formats: ["markdown", "links"],
+      waitFor: 2500,
+      timeout: 30000,
+      location: { country: "AU", languages: ["en-AU"] },
+      onlyMainContent: true,
+    }),
   });
   if (!res.ok) throw new Error(`Firecrawl failed (${res.status})`);
   const payload = await res.json();
-  const links: string[] = payload.links ?? payload.data?.links ?? [];
+  const data = payload.data || payload;
+  const markdown = String(data.markdown ?? "");
+  const links: string[] = Array.isArray(data.links) ? data.links : [];
   const seen = new Set<string>();
-  return links.flatMap((link) => {
-    const match = String(link).match(/seek\.com\.au\/job\/(\d+)/);
-    if (!match || seen.has(match[1])) return [];
-    seen.add(match[1]);
-    const parsed = new URL(link);
-    const title = parsed.searchParams.get("title") || keywords;
-    return [{ seek_job_id: match[1], title, company: "See SEEK listing", location: location || "Australia", description_snippet: `SEEK listing discovered for ${keywords}. Open the listing for full details.`, job_url: `https://www.seek.com.au/job/${match[1]}` }];
-  }).slice(0, 15);
+  const jobs: ScrapedJob[] = [];
+  const push = (id: string, titleHint?: string) => {
+    if (!/^\d+$/.test(id) || seen.has(id) || jobs.length >= 15) return;
+    seen.add(id);
+    jobs.push({
+      seek_job_id: id,
+      title: (titleHint && titleHint.trim()) || keywords,
+      company: "See SEEK listing",
+      location: location || "Australia",
+      description_snippet: `SEEK listing discovered for ${keywords}. Open the listing for full details.`,
+      job_url: `https://www.seek.com.au/job/${id}`,
+    });
+  };
+  for (const link of links) {
+    const match = String(link).match(/seek\.com\.au\/job\/(\d+)/i);
+    if (match) push(match[1]);
+  }
+  const mdMatches = markdown.matchAll(/\[(?<title>[^\]]{3,160})\]\((?<url>https?:\/\/www\.seek\.com\.au\/job\/(?<id>\d+)[^)]*)\)/g);
+  for (const m of mdMatches) push(m.groups!.id, m.groups!.title);
+  if (jobs.length === 0) {
+    for (const m of markdown.matchAll(/seek\.com\.au\/job\/(\d+)/gi)) push(m[1]);
+  }
+  return jobs.slice(0, 15);
 }
 
 async function scoreJob(job: Record<string, unknown>, resume: Record<string, unknown>, prefs: CandidatePreferences | null) {
