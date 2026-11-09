@@ -8,6 +8,7 @@ export const SCOPES = [
   "documents:write",
   "runs:heartbeat",
   "runs:complete",
+  "matches:read",
 ] as const;
 export type Scope = (typeof SCOPES)[number];
 

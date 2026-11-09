@@ -259,7 +259,7 @@ export async function updateJobStatus(
   if (isGuest()) { guestUpdateStatus(jobId, status); return; }
   const { error } = await supabase
     .from("jobs")
-    .update({ pipeline_status: status })
+    .update({ pipeline_status: status, ...(status === "inbox" ? { auto_hidden_at: null, triage_source: "manual" } : {}) })
     .eq("id", jobId);
   if (error) throw error;
 }

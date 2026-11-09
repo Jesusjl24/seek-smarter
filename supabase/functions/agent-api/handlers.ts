@@ -13,6 +13,35 @@ import type { AgentIdentity } from "./auth.ts";
 
 const MAX_ATTEMPTS = 5;
 
+export async function handleMatches(
+  admin: SupabaseClient,
+  identity: AgentIdentity,
+  since: string,
+  minGrade: "A" | "B",
+) {
+  const sinceDate = new Date(since);
+  if (!since || Number.isNaN(sinceDate.getTime())) throw new ApiError("invalid_request", "since must be ISO8601");
+  const grades = minGrade === "B" ? ["A", "B"] : ["A"];
+  const { data, error } = await admin
+    .from("job_matches")
+    .select("job_id,match_score,grade,why_apply,reasoning,strategic_advice,scored_at,jobs!inner(title,company,location,job_url,pipeline_status)")
+    .eq("user_id", identity.ownerUserId)
+    .gt("scored_at", sinceDate.toISOString())
+    .in("grade", grades)
+    .in("jobs.pipeline_status", ["inbox", "shortlist"])
+    .order("scored_at", { ascending: true });
+  if (error) throw new ApiError("internal_error", "Could not read matches");
+  const matches = (data ?? []).map((row) => ({
+    job_id: row.job_id,
+    score: row.match_score,
+    grade: row.grade,
+    why_apply: row.why_apply || row.strategic_advice || row.reasoning,
+    scored_at: row.scored_at,
+    job: row.jobs,
+  }));
+  return { schema_version: SCHEMA_VERSION, matches, next_since: matches.at(-1)?.scored_at ?? sinceDate.toISOString() };
+}
+
 interface TaskRow {
   id: string;
   user_id: string;

@@ -44,6 +44,9 @@ export interface Job {
   pipeline_status: PipelineStatus;
   notes: string | null;
   updated_at: string;
+  triage_source?: 'manual' | 'auto' | 'agent';
+  search_profile_id?: string | null;
+  auto_hidden_at?: string | null;
 }
 
 export interface ResumeProfile {
@@ -78,6 +81,9 @@ export interface JobMatch {
   gaps: string[];
   strategic_advice: string | null;
   scored_at: string;
+  grade?: 'A' | 'B' | 'C' | 'D' | null;
+  why_apply?: string | null;
+  risks?: string | null;
   // Agent metadata fields
   agent?: string;
   agent_version?: string;

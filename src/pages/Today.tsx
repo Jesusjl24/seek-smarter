@@ -8,6 +8,7 @@ import {
   PackageCheck,
   RefreshCw,
   Send,
+  Play,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -23,12 +24,14 @@ import { useToast } from "@/hooks/use-toast";
 import { EMPTY_PREFERENCES, type CandidatePreferences, type ScorePolicy } from "@/types/preferences";
 import type { AssistantSnapshot } from "@/types/assistant";
 import { formatDistanceToNow } from "date-fns";
+import { runSavedSearchesNow } from "@/lib/api/pipeline";
 
 const Today = () => {
   const [snapshot, setSnapshot] = useState<AssistantSnapshot | null>(null);
   const [prefs, setPrefs] = useState<CandidatePreferences>(EMPTY_PREFERENCES);
   const [loading, setLoading] = useState(true);
   const [reviewId, setReviewId] = useState<string | null>(null);
+  const [running, setRunning] = useState(false);
   const { toast } = useToast();
   const { refreshCounts } = useLayoutContext();
   const navigate = useNavigate();
@@ -80,6 +83,12 @@ const Today = () => {
       toast({ title: "Could not move that role", variant: "destructive" });
     }
   };
+  const runPipeline = async () => {
+    setRunning(true);
+    try { const result = await runSavedSearchesNow(); toast({ title: "Saved searches finished", description: `${result.totals} profile${result.totals === 1 ? "" : "s"} processed.` }); await load(); }
+    catch (e) { toast({ title: "Could not run saved searches", description: e instanceof Error ? e.message : undefined, variant: "destructive" }); }
+    finally { setRunning(false); }
+  };
 
   if (loading || !snapshot) {
     return (
@@ -111,6 +120,10 @@ const Today = () => {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={runPipeline} disabled={running}>
+            <Play className="mr-1.5 h-4 w-4" aria-hidden />
+            {running ? "Running…" : "Run saved searches now"}
+          </Button>
           <Button variant="outline" size="sm" onClick={load}>
             <RefreshCw className="mr-1.5 h-4 w-4" aria-hidden />
             Refresh
@@ -153,6 +166,9 @@ const Today = () => {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
+        <SectionPanel testId="today-aligned" title="Aligned roles" description="New graded roles from the latest search window." count={snapshot.incoming.length} isEmpty={snapshot.incoming.length === 0} emptyMessage="No new aligned roles yet.">
+          <ul className="divide-y">{snapshot.incoming.slice(0, 8).map((job) => <li key={job.job_id} className="py-2"><div className="flex gap-2"><span className="rounded bg-primary/10 px-2 py-0.5 text-sm font-semibold text-primary">{job.grade}</span><div className="min-w-0"><p className="truncate text-sm font-medium">{job.title} · {job.company}</p><p className="line-clamp-2 text-xs text-muted-foreground">{job.why_apply || job.band_label}</p></div><span className="ml-auto text-sm tabular-nums">{job.score}</span></div></li>)}</ul>
+        </SectionPanel>
         <SectionPanel
           testId="today-questions"
           title="Waiting on you"

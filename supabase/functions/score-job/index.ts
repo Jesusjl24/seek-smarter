@@ -4,6 +4,7 @@ import { evaluateDealbreakers, type CandidatePreferences } from "../_shared/deal
 import { bandLabel, resolvePolicy } from "../_shared/policy.ts";
 import { corsFor, originRejected, preflight } from "../_shared/cors.ts";
 import { enforceRateLimit, readJsonBody, RateLimitError, PayloadTooLargeError } from "../_shared/ratelimit.ts";
+import { gradeForScore, whyApply } from "../_shared/grade.ts";
 
 let corsHeaders: Record<string, string> = {};
 
@@ -245,6 +246,7 @@ about experience claims, assume they are not present. Return ONLY the JSON objec
     }
 
     const recommendation = bandLabel(weightedScore, policy);
+    const grade = gradeForScore(weightedScore, policy);
 
     const match = {
       agent_meta: {
@@ -257,6 +259,7 @@ about experience claims, assume they are not present. Return ONLY the JSON objec
       match_score: weightedScore,
       skill_match_percentage: normalizeScore(matchResult.skill_match_percentage),
       recommendation,
+      grade,
       policy,
       dealbreaker_hits: dealbreakerHits,
       concerns: arr(matchResult.concerns),
@@ -267,6 +270,7 @@ about experience claims, assume they are not present. Return ONLY the JSON objec
       reasoning: typeof matchResult.reasoning === 'string' ? matchResult.reasoning : '',
       strategic_advice:
         typeof matchResult.strategic_advice === 'string' ? matchResult.strategic_advice : '',
+      why_apply: whyApply(matchResult),
       gaps: arr(matchResult.evidence_gaps),
     };
 

@@ -736,6 +736,7 @@ export type Database = {
           concerns: string[]
           cons: string[] | null
           dealbreaker_hits: string[]
+          grade: string | null
           gaps: string[] | null
           id: string
           job_id: string
@@ -748,6 +749,8 @@ export type Database = {
           scores: Json | null
           skill_match_percentage: number | null
           strategic_advice: string | null
+          why_apply: string | null
+          risks: string | null
           user_id: string
           veto_reasons: string[] | null
         }
@@ -757,6 +760,7 @@ export type Database = {
           concerns?: string[]
           cons?: string[] | null
           dealbreaker_hits?: string[]
+          grade?: string | null
           gaps?: string[] | null
           id?: string
           job_id: string
@@ -769,6 +773,8 @@ export type Database = {
           scores?: Json | null
           skill_match_percentage?: number | null
           strategic_advice?: string | null
+          why_apply?: string | null
+          risks?: string | null
           user_id?: string
           veto_reasons?: string[] | null
         }
@@ -778,6 +784,7 @@ export type Database = {
           concerns?: string[]
           cons?: string[] | null
           dealbreaker_hits?: string[]
+          grade?: string | null
           gaps?: string[] | null
           id?: string
           job_id?: string
@@ -790,6 +797,8 @@ export type Database = {
           scores?: Json | null
           skill_match_percentage?: number | null
           strategic_advice?: string | null
+          why_apply?: string | null
+          risks?: string | null
           user_id?: string
           veto_reasons?: string[] | null
         }
@@ -880,6 +889,7 @@ export type Database = {
       }
       jobs: {
         Row: {
+          auto_hidden_at: string | null
           company: string
           date_posted: string | null
           date_scraped: string
@@ -891,14 +901,17 @@ export type Database = {
           notes: string | null
           pipeline_status: string
           salary_range: string | null
+          search_profile_id: string | null
           seek_job_id: string
           title: string
+          triage_source: string
           updated_at: string | null
           user_id: string
           work_arrangement: string | null
           work_type: string | null
         }
         Insert: {
+          auto_hidden_at?: string | null
           company: string
           date_posted?: string | null
           date_scraped?: string
@@ -910,14 +923,17 @@ export type Database = {
           notes?: string | null
           pipeline_status?: string
           salary_range?: string | null
+          search_profile_id?: string | null
           seek_job_id: string
           title: string
+          triage_source?: string
           updated_at?: string | null
           user_id?: string
           work_arrangement?: string | null
           work_type?: string | null
         }
         Update: {
+          auto_hidden_at?: string | null
           company?: string
           date_posted?: string | null
           date_scraped?: string
@@ -929,14 +945,30 @@ export type Database = {
           notes?: string | null
           pipeline_status?: string
           salary_range?: string | null
+          search_profile_id?: string | null
           seek_job_id?: string
           title?: string
+          triage_source?: string
           updated_at?: string | null
           user_id?: string
           work_arrangement?: string | null
           work_type?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "jobs_search_profile_id_fkey"
+            columns: ["search_profile_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "search_profiles"
+            referencedColumns: ["id", "user_id"]
+          },
+        ]
+      }
+      pipeline_runs: {
+        Row: { id: string; user_id: string; search_profile_id: string | null; started_at: string; finished_at: string | null; status: string; jobs_found: number; jobs_scored: number; jobs_hidden: number; jobs_strong: number; error: string | null; metadata: Json }
+        Insert: { id?: string; user_id?: string; search_profile_id?: string | null; started_at?: string; finished_at?: string | null; status?: string; jobs_found?: number; jobs_scored?: number; jobs_hidden?: number; jobs_strong?: number; error?: string | null; metadata?: Json }
+        Update: { id?: string; user_id?: string; search_profile_id?: string | null; started_at?: string; finished_at?: string | null; status?: string; jobs_found?: number; jobs_scored?: number; jobs_hidden?: number; jobs_strong?: number; error?: string | null; metadata?: Json }
+        Relationships: [{ foreignKeyName: "pipeline_runs_search_profile_id_fkey"; columns: ["search_profile_id"]; isOneToOne: false; referencedRelation: "search_profiles"; referencedColumns: ["id"] }]
       }
       rate_limits: {
         Row: {
@@ -1070,9 +1102,13 @@ export type Database = {
           excluded_companies: string[]
           id: string
           industries: string[]
+          last_error: string | null
+          last_run_at: string | null
+          last_run_status: string | null
           locations: string[]
           name: string
           salary_min: number | null
+          run_interval_minutes: number
           target_titles: string[]
           updated_at: string
           user_id: string
@@ -1088,9 +1124,13 @@ export type Database = {
           excluded_companies?: string[]
           id?: string
           industries?: string[]
+          last_error?: string | null
+          last_run_at?: string | null
+          last_run_status?: string | null
           locations?: string[]
           name: string
           salary_min?: number | null
+          run_interval_minutes?: number
           target_titles?: string[]
           updated_at?: string
           user_id?: string
@@ -1106,9 +1146,13 @@ export type Database = {
           excluded_companies?: string[]
           id?: string
           industries?: string[]
+          last_error?: string | null
+          last_run_at?: string | null
+          last_run_status?: string | null
           locations?: string[]
           name?: string
           salary_min?: number | null
+          run_interval_minutes?: number
           target_titles?: string[]
           updated_at?: string
           user_id?: string

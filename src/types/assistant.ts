@@ -63,6 +63,7 @@ export interface AssistantSnapshot {
   review: number;
   deprioritise: number;
   questions: AssistantQuestion[];
+  incoming: Array<{ job_id: string; title: string; company: string; score: number; grade: "A" | "B" | "C" | "D"; why_apply: string; band_label: string }>;
   documents_ready: AssistantDocument[];
   packages_ready: AssistantPackage[];
   telegram: TelegramActivity;

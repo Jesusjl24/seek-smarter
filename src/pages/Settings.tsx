@@ -4,13 +4,20 @@ import { fetchPreferences, savePreferences } from "@/lib/api/preferences";
 import { EMPTY_PREFERENCES, type CandidatePreferences } from "@/types/preferences";
 import { useToast } from "@/hooks/use-toast";
 import { isGuest } from "@/lib/guest";
-import { Loader2 } from "lucide-react";
+import { Loader2, Plus } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
+import { createSearchProfile, fetchSearchProfiles, setSearchProfileActive } from "@/lib/api/pipeline";
+import type { SearchProfile } from "@/types/assistant";
 
 const Settings = () => {
   const [prefs, setPrefs] = useState<CandidatePreferences>(EMPTY_PREFERENCES);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const { toast } = useToast();
+  const [profiles, setProfiles] = useState<SearchProfile[]>([]);
+  const [draft, setDraft] = useState({ name: "", titles: "", locations: "", salary: "" });
 
   useEffect(() => {
     fetchPreferences()
@@ -25,6 +32,15 @@ const Settings = () => {
       })
       .finally(() => setLoading(false));
   }, [toast]);
+  useEffect(() => { if (!isGuest()) fetchSearchProfiles().then(setProfiles).catch(console.error); }, []);
+
+  const addProfile = async () => {
+    if (!draft.name.trim() || !draft.titles.trim()) return;
+    try {
+      const created = await createSearchProfile({ name: draft.name.trim(), target_titles: draft.titles.split(",").map((x) => x.trim()).filter(Boolean), locations: draft.locations.split(",").map((x) => x.trim()).filter(Boolean), salary_min: draft.salary ? Number(draft.salary) : null });
+      setProfiles((current) => [...current, created]); setDraft({ name: "", titles: "", locations: "", salary: "" });
+    } catch (e) { toast({ title: "Could not create saved search", variant: "destructive" }); }
+  };
 
   const handleSave = async () => {
     setSaving(true);
@@ -65,6 +81,7 @@ const Settings = () => {
         </p>
       </div>
       <PreferencesForm value={prefs} onChange={setPrefs} onSave={handleSave} saving={saving} />
+      {!isGuest() && <section className="space-y-4 rounded-lg border p-4"><div><h2 className="font-semibold">Saved searches</h2><p className="text-sm text-muted-foreground">Active searches run on the job-agent schedule.</p></div><div className="grid gap-2 sm:grid-cols-2"><Input placeholder="Name" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })}/><Input placeholder="Target titles, comma separated" value={draft.titles} onChange={(e) => setDraft({ ...draft, titles: e.target.value })}/><Input placeholder="Locations, comma separated" value={draft.locations} onChange={(e) => setDraft({ ...draft, locations: e.target.value })}/><Input type="number" placeholder="Minimum salary" value={draft.salary} onChange={(e) => setDraft({ ...draft, salary: e.target.value })}/></div><Button size="sm" onClick={addProfile}><Plus className="mr-1 h-4 w-4"/>Add saved search</Button><div className="divide-y">{profiles.map((profile) => <div key={profile.id} className="flex items-center justify-between py-3"><div><p className="text-sm font-medium">{profile.name}</p><p className="text-xs text-muted-foreground">{profile.target_titles.join(", ")} · {profile.locations.join(", ") || "Any location"}</p></div><Switch checked={profile.active} onCheckedChange={async (active) => { await setSearchProfileActive(profile.id, active); setProfiles((items) => items.map((p) => p.id === profile.id ? { ...p, active } : p)); }}/></div>)}</div></section>}
     </div>
   );
 };

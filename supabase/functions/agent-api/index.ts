@@ -18,6 +18,7 @@ import {
   handleFail,
   handleHeartbeat,
   handleRecommendation,
+  handleMatches,
 } from "./handlers.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -29,6 +30,7 @@ const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
 });
 
 type Route =
+  | { kind: "matches" }
   | { kind: "claim" }
   | { kind: "context"; taskId: string }
   | { kind: "heartbeat"; taskId: string }
@@ -45,6 +47,9 @@ function matchRoute(method: string, path: string): { route: Route; scope: Scope 
   const v1 = parts.indexOf("v1");
   if (v1 === -1) return null;
   const rest = parts.slice(v1 + 1);
+  if (rest.length === 1 && rest[0] === "matches" && method === "GET") {
+    return { route: { kind: "matches" }, scope: "matches:read" };
+  }
   if (rest[0] !== "tasks") return null;
 
   if (rest.length === 2 && rest[1] === "claim" && method === "POST") {
@@ -102,7 +107,7 @@ Deno.serve(async (req) => {
     const identity = await authenticate(admin, req, url.pathname, rawBody, matched.scope);
     await enforceLimits(admin, identity.agentId);
 
-    const isWrite = matched.route.kind !== "context";
+    const isWrite = matched.route.kind !== "context" && matched.route.kind !== "matches";
     if (isWrite && !identity.idempotencyKey) {
       throw new ApiError("invalid_request", "x-idempotency-key header is required for writes");
     }
@@ -122,6 +127,12 @@ Deno.serve(async (req) => {
 
     let payload: unknown;
     switch (matched.route.kind) {
+      case "matches": {
+        const grade = url.searchParams.get("min_grade") ?? "A";
+        if (grade !== "A" && grade !== "B") throw new ApiError("invalid_request", "min_grade must be A or B");
+        payload = await handleMatches(admin, identity, url.searchParams.get("since") ?? "", grade);
+        break;
+      }
       case "claim":
         payload = await handleClaim(admin, identity, parse(ClaimRequest, rawBody));
         break;

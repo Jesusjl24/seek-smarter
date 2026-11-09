@@ -48,6 +48,7 @@ export function buildAssistantSnapshot(params: {
   let review = 0;
   let deprioritise = 0;
   const questions: AssistantQuestion[] = [];
+  const incoming: AssistantSnapshot["incoming"] = [];
 
   for (const job of assessed) {
     const score = job.match!.match_score;
@@ -69,6 +70,9 @@ export function buildAssistantSnapshot(params: {
             ? "Shortlist this role or rule it out?"
             : "Worth a closer read — shortlist or not a fit?",
       });
+    }
+    if ((job.pipeline_status === "inbox" || job.pipeline_status === "shortlist") && job.match?.grade) {
+      incoming.push({ job_id: job.id, title: job.title, company: job.company, score, grade: job.match.grade, why_apply: job.match.why_apply || job.match.strategic_advice || job.match.reasoning || "", band_label: BAND_LABELS[band] });
     }
   }
 
@@ -136,6 +140,7 @@ export function buildAssistantSnapshot(params: {
     review,
     deprioritise,
     questions,
+    incoming: incoming.sort((a, b) => b.score - a.score),
     documents_ready,
     packages_ready,
     // Telegram is not wired up yet — report that honestly rather than faking activity.

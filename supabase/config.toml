@@ -9,6 +9,12 @@ verify_jwt = false
 [functions.score-job]
 verify_jwt = false
 
+[functions.run-job-pipeline]
+verify_jwt = false
+
+[functions.agent-api]
+verify_jwt = false
+
 [functions.tailor-resume]
 verify_jwt = false
 
