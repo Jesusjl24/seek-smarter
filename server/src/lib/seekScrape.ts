@@ -8,11 +8,29 @@ function extractIds(text: string): string[] {
   return [...new Set([...text.matchAll(/(?:job|jobs)\/(\d{6,})/gi)].map((m) => m[1]))];
 }
 
-async function discoverIds(config: Config, input: any): Promise<{ ids: string[]; source: string; message?: string }> {
+function isRemoteLocation(location?: string) {
+  return /remote|work from home|all australia|^australia$/i.test(String(location || "").trim());
+}
+
+export function seekSearchUrl(input: any): string {
   const query = new URLSearchParams();
   if (input.keywords) query.set("keywords", input.keywords);
-  if (input.location) query.set("where", input.location);
-  const url = `https://www.seek.com.au/jobs?${query}`;
+  const remote = isRemoteLocation(input.location) || String(input.workArrangement || "").toLowerCase().includes("remote");
+  if (remote) {
+    query.set("where", "All Australia");
+    // SEEK uses work-from-home for remote listings.
+    query.set("workarrangement", "work-from-home");
+  } else if (input.location) {
+    query.set("where", input.location);
+  }
+  if (input.salaryMin) { query.set("salaryrange", `${Number(input.salaryMin)}-999999`); query.set("salarytype", "annual"); }
+  // SEEK worktype=242 is full time; 244 is contract/temp and is intentionally excluded.
+  if (String(input.workType || "").toLowerCase().includes("full")) query.set("worktype", "242");
+  return `https://www.seek.com.au/jobs?${query}`;
+}
+
+export async function discoverIds(config: Config, input: any): Promise<{ ids: string[]; source: string; message?: string }> {
+  const url = seekSearchUrl(input);
   const limit = Number(input.jobLimit || input.limit || 20);
 
   if (config.firecrawlApiKey) {
@@ -46,7 +64,9 @@ async function discoverIds(config: Config, input: any): Promise<{ ids: string[];
 
 export async function scrapeSeek(config: Config, input: any): Promise<{ jobs: ScrapedJob[]; diagnostics: any }> {
   try {
-    const discovered = await discoverIds(config, input);
+    const locations: string[] = input.locations?.length ? input.locations : [input.location].filter(Boolean);
+    const discoveries = await Promise.all((locations.length ? locations : [undefined]).map((location) => discoverIds(config, { ...input, location, workArrangement: isRemoteLocation(location) ? 'remote' : undefined })));
+    const discovered = { ids: [...new Set(discoveries.flatMap((item) => item.ids))], source: discoveries.map((item) => item.source).join("+"), message: discoveries.map((item) => item.message).filter(Boolean).join(" ") || undefined };
     const cap = Math.min(8, Number(input.jobLimit || input.limit || 8));
     const { jobs, enrichedCount } = await enrichJobsFromIdsWithFallback(discovered.ids, config.firecrawlApiKey, cap);
     return {

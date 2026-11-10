@@ -19,6 +19,8 @@ export interface CandidatePreferences extends ScorePolicy {
   target_titles: string[];
   target_industries: string[];
   excluded_titles: string[];
+  excluded_industries: string[];
+  auto_generate_drafts: boolean;
   salary_min: number | null;
   salary_target: number | null;
   currency: string;
@@ -38,6 +40,8 @@ export const EMPTY_PREFERENCES: CandidatePreferences = {
   target_titles: [],
   target_industries: [],
   excluded_titles: [],
+  excluded_industries: [],
+  auto_generate_drafts: false,
   salary_min: null,
   salary_target: null,
   currency: "AUD",

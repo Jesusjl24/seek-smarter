@@ -8,7 +8,6 @@ import {
   DoorOpen,
   SlidersHorizontal,
   Sun,
-  Activity,
   FileText,
 } from "lucide-react";
 
@@ -53,15 +52,7 @@ const navGroups: { label: string; items: NavItem[] }[] = [
   {
     label: "Daily",
     items: [
-      { title: "Today", url: "/today", icon: Sun, countKey: null, testId: "nav-today" },
-      { title: "Job Inbox", url: "/", icon: Inbox, countKey: "inbox" },
-      {
-        title: "Assistant Activity",
-        url: "/assistant",
-        icon: Activity,
-        countKey: null,
-        testId: "nav-assistant",
-      },
+      { title: "Briefing", url: "/", icon: Sun, countKey: null, testId: "nav-briefing" },
       {
         title: "Documents",
         url: "/documents",
@@ -74,6 +65,7 @@ const navGroups: { label: string; items: NavItem[] }[] = [
   {
     label: "Pipeline",
     items: [
+      { title: "Job library", url: "/inbox", icon: Inbox, countKey: "inbox" },
       { title: "Shortlist", url: "/shortlist", icon: Star, countKey: "shortlist" },
       { title: "Not a Fit", url: "/not-a-fit", icon: XCircle, countKey: "not_fit" },
     ],
@@ -101,7 +93,7 @@ export function AppSidebar({ profile, onProfileUpdate, counts, isGuest, onExitGu
             <div className="min-w-0">
               <h1 className="text-base font-semibold tracking-tight truncate">Seek Smarter</h1>
               <p className="text-xs text-muted-foreground truncate">
-                Private AI job-search cockpit
+                Your morning briefing
               </p>
             </div>
           </div>

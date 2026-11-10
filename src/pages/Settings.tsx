@@ -9,6 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { createSearchProfile, fetchSearchProfiles, setSearchProfileActive } from "@/lib/api/pipeline";
+import { runSavedSearchesNow } from "@/lib/api/pipeline";
+import { apiGet, apiPut } from "@/lib/api/client";
 import type { SearchProfile } from "@/types/assistant";
 
 const Settings = () => {
@@ -18,6 +20,8 @@ const Settings = () => {
   const { toast } = useToast();
   const [profiles, setProfiles] = useState<SearchProfile[]>([]);
   const [draft, setDraft] = useState({ name: "", titles: "", locations: "", salary: "" });
+  const [schedule, setSchedule] = useState({ pipeline_cron: "0 6 * * *", pipeline_timezone: "Australia/Sydney" });
+  const [running, setRunning] = useState(false);
 
   useEffect(() => {
     fetchPreferences()
@@ -33,6 +37,7 @@ const Settings = () => {
       .finally(() => setLoading(false));
   }, [toast]);
   useEffect(() => { if (!isGuest()) fetchSearchProfiles().then(setProfiles).catch(console.error); }, []);
+  useEffect(() => { if (!isGuest()) apiGet<typeof schedule>("/api/settings/schedule").then(setSchedule).catch(console.error); }, []);
 
   const addProfile = async () => {
     if (!draft.name.trim() || !draft.titles.trim()) return;
@@ -82,6 +87,7 @@ const Settings = () => {
       </div>
       <PreferencesForm value={prefs} onChange={setPrefs} onSave={handleSave} saving={saving} />
       {!isGuest() && <section className="space-y-4 rounded-lg border p-4"><div><h2 className="font-semibold">Saved searches</h2><p className="text-sm text-muted-foreground">Active searches run on the job-agent schedule.</p></div><div className="grid gap-2 sm:grid-cols-2"><Input placeholder="Name" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })}/><Input placeholder="Target titles, comma separated" value={draft.titles} onChange={(e) => setDraft({ ...draft, titles: e.target.value })}/><Input placeholder="Locations, comma separated" value={draft.locations} onChange={(e) => setDraft({ ...draft, locations: e.target.value })}/><Input type="number" placeholder="Minimum salary" value={draft.salary} onChange={(e) => setDraft({ ...draft, salary: e.target.value })}/></div><Button size="sm" onClick={addProfile}><Plus className="mr-1 h-4 w-4"/>Add saved search</Button><div className="divide-y">{profiles.map((profile) => <div key={profile.id} className="flex items-center justify-between py-3"><div><p className="text-sm font-medium">{profile.name}</p><p className="text-xs text-muted-foreground">{profile.target_titles.join(", ")} · {profile.locations.join(", ") || "Any location"}</p></div><Switch checked={profile.active} onCheckedChange={async (active) => { await setSearchProfileActive(profile.id, active); setProfiles((items) => items.map((p) => p.id === profile.id ? { ...p, active } : p)); }}/></div>)}</div></section>}
+      {!isGuest() && <section className="space-y-4 rounded-lg border p-4"><div><h2 className="font-semibold">Daily briefing schedule</h2><p className="text-sm text-muted-foreground">Saved searches run automatically at this time. Changes apply immediately.</p></div><div className="grid gap-3 sm:grid-cols-2"><Input aria-label="Cron expression" value={schedule.pipeline_cron} onChange={e=>setSchedule({...schedule,pipeline_cron:e.target.value})}/><Input aria-label="Timezone" value={schedule.pipeline_timezone} onChange={e=>setSchedule({...schedule,pipeline_timezone:e.target.value})}/></div><div className="flex flex-wrap gap-2"><Button variant="outline" onClick={async()=>{await apiPut("/api/settings/schedule",schedule);toast({title:"Schedule saved"})}}>Save schedule</Button><Button size="sm" variant="ghost" disabled={running} onClick={async()=>{setRunning(true);try{await runSavedSearchesNow();toast({title:"Briefing run complete"})}finally{setRunning(false)}}}>{running?"Running…":"Run now"}</Button></div></section>}
     </div>
   );
 };

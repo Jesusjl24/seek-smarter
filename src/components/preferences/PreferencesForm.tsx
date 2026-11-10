@@ -6,6 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
 import { X, Plus } from "lucide-react";
 import {
   WORK_ARRANGEMENT_OPTIONS,
@@ -255,6 +256,7 @@ export function PreferencesForm({ value, onChange, onSave, saving }: Props) {
             onChange={(v) => set("excluded_titles", v)}
             placeholder="Salesforce Admin"
           />
+          <ChipInput label="Excluded industries" help="Listings matching these industries are filtered out." values={value.excluded_industries} onChange={(v) => set("excluded_industries", v)} placeholder="Gambling" />
           <ChipInput
             label="Required qualifications"
             help="Flagged when the listing does not mention them."
@@ -270,6 +272,11 @@ export function PreferencesForm({ value, onChange, onSave, saving }: Props) {
             placeholder="on-call rotation"
           />
         </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader><CardTitle>Application drafts</CardTitle><CardDescription>On-demand Resume and Cover Letter buttons remain available.</CardDescription></CardHeader>
+        <CardContent><label className="flex min-h-11 items-center justify-between gap-4 text-sm"><span>Automatically generate drafts for strong matches</span><Switch checked={value.auto_generate_drafts} onCheckedChange={(checked) => set("auto_generate_drafts", checked)} /></label></CardContent>
       </Card>
 
       <Card>

@@ -8,6 +8,7 @@ import { AuthProvider } from "@/hooks/useAuth";
 import { RequireAuth } from "@/components/auth/RequireAuth";
 import { MainLayout } from "@/components/layout/MainLayout";
 import Inbox from "./pages/Inbox";
+import Briefing from "./pages/Briefing";
 import Today from "./pages/Today";
 import Documents from "./pages/Documents";
 import AssistantActivity from "./pages/AssistantActivity";
@@ -45,7 +46,9 @@ const App = () => (
                 <Route path="/today" element={<Today />} />
                 <Route path="/documents" element={<Documents />} />
                 <Route path="/assistant" element={<AssistantActivity />} />
-                <Route path="/" element={<Inbox />} />
+                <Route path="/" element={<Briefing />} />
+                <Route path="/briefing" element={<Briefing />} />
+                <Route path="/inbox" element={<Inbox />} />
 
                 <Route path="/shortlist" element={<Shortlist />} />
                 <Route path="/not-a-fit" element={<NotAFit />} />

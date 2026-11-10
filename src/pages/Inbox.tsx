@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { ArrowRight, Download, Sparkles } from "lucide-react";
-import { SearchSourceBar } from "@/components/search/SearchSourceBar";
 import { SearchProgress } from "@/components/search/SearchProgress";
 import { RecommendationCard } from "@/components/jobs/RecommendationCard";
 import { ReviewQueue } from "@/components/jobs/ReviewQueue";
@@ -517,18 +516,11 @@ const Inbox = () => {
 
         <PolicyBar policy={policy} compact />
 
-        <SearchSourceBar
-          filters={filters}
-          onFiltersChange={setFilters}
-          onSearch={handleSearch}
-          isSearching={isSearching}
-        />
-
         {jobs.length === 0 ? (
           <div className="rounded-lg border border-dashed p-10 text-center">
             <p className="text-sm font-medium">Your inbox is empty</p>
             <p className="mt-1 text-sm text-muted-foreground">
-              Run a search above to bring roles in.
+              Roles appear here after a briefing run. Use Run now in Settings if you need a refresh.
             </p>
           </div>
         ) : (
