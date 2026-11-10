@@ -66,7 +66,7 @@ export async function scrapeSeek(config: Config, input: any): Promise<{ jobs: Sc
   try {
     const locations: string[] = input.locations?.length ? input.locations : [input.location].filter(Boolean);
     const discoveries = await Promise.all((locations.length ? locations : [undefined]).map((location) => discoverIds(config, { ...input, location, workArrangement: isRemoteLocation(location) ? 'remote' : undefined })));
-    const discovered = { ids: [...new Set(discoveries.flatMap((item) => item.ids))], source: discoveries.map((item) => item.source).join("+"), message: discoveries.map((item) => item.message).filter(Boolean).join(" ") || undefined };
+    const discovered = { ids: [...new Set(discoveries.flatMap((item) => item.ids))], source: discoveries.map((item) => item.source).join("+"), message: [...new Set(discoveries.map((item) => item.message).filter(Boolean))].join(" ") || undefined };
     const cap = Math.min(8, Number(input.jobLimit || input.limit || 8));
     const { jobs, enrichedCount } = await enrichJobsFromIdsWithFallback(discovered.ids, config.firecrawlApiKey, cap);
     return {

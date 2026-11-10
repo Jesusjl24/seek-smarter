@@ -91,8 +91,27 @@ describe("briefing redesign", () => {
     expect(result.briefing).toMatchObject({ scanned: 0 });
     expect(result.profiles.every((profile: any) => (profile.jobs_drafted ?? 0) === 0)).toBe(true);
     const briefing = db.prepare("SELECT * FROM briefings WHERE user_id='u3'").get() as any;
-    expect(briefing.summary_text).toMatch(/listings scanned/);
+    expect(briefing.summary_text).toMatch(/Nothing was added to this briefing|listings scanned/);
+    expect(result.reasons.join(" ")).toMatch(/FIRECRAWL_API_KEY for reliable scraping/);
     expect((db.prepare("SELECT count(*) count FROM document_revisions").get() as any).count).toBe(0);
+  });
+
+  it("keeps Firecrawl key rejection in the briefing and does not drop it as a non-blocking diagnostic", async () => {
+    const db = openDatabase(":memory:");
+    db.prepare("INSERT INTO users VALUES(?,?,?,?)").run("owner", "owner@example.com", "hash", "now");
+    const config = { ...baseConfig, firecrawlApiKey: "stub-key-xx" };
+    vi.stubGlobal("fetch", vi.fn(async (input: any) => {
+      const url = String(input);
+      if (url.includes("firecrawl.dev")) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
+      return new Response("should not hit SEEK", { status: 200 });
+    }));
+    const result = await runPipeline(db, config, "owner", false);
+    expect((db.prepare("SELECT count(*) c FROM search_profiles WHERE user_id='owner'").get() as any).c).toBe(3);
+    expect(result.searches_run).toBe(3);
+    expect(result.reasons.join(" ")).toMatch(/Firecrawl key rejected \(401\)/);
+    expect(result.summary_text).toMatch(/Nothing was added to this briefing:.*Firecrawl key rejected \(401\)/);
+    expect(result.profiles.every((profile: any) => (profile.skipped || []).some((item: string) => /Firecrawl key rejected/.test(item)))).toBe(true);
+    expect(result.searches).toHaveLength(3);
   });
 
   it("exposes briefing APIs, feedback, restore, and the agent latest endpoint", async () => {

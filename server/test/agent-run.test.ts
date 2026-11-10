@@ -17,6 +17,8 @@ const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 afterEach(() => {
   resetAgentRunState();
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 
 describe("POST /api/agent/run", () => {
@@ -61,5 +63,29 @@ describe("POST /api/agent/run", () => {
     await wait(60);
     const again = await app.request("/api/agent/run", { method: "POST", headers: { authorization: "Bearer agent-secret" } });
     expect(again.status).toBe(202);
+  });
+
+  it("exposes per-search skip reasons and search counts on status after a Firecrawl 401", async () => {
+    const db = openDatabase(":memory:");
+    const app = createApp({ db, config: { ...config, firecrawlApiKey: "stub-key-xx" }, agentToken: "agent-secret" });
+    await app.request("/api/auth/signup", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email: "owner@example.com", password: "password123" }) });
+    vi.stubGlobal("fetch", vi.fn(async (input: any) => {
+      if (String(input).includes("firecrawl.dev")) return new Response("nope", { status: 401 });
+      return new Response("unexpected", { status: 200 });
+    }));
+    const started = await app.request("/api/agent/run", { method: "POST", headers: { authorization: "Bearer agent-secret" }, body: "{}" });
+    expect(started.status).toBe(202);
+    let body: any;
+    for (let i = 0; i < 50; i++) {
+      body = await (await app.request("/api/agent/run/status", { headers: { authorization: "Bearer agent-secret" } })).json();
+      if (body.status === "completed" || body.status === "failed") break;
+      await wait(20);
+    }
+    expect(body.status).toBe("completed");
+    expect(body.searches_run).toBe(3);
+    expect(body.searches_total).toBe(3);
+    expect(body.reasons.join(" ")).toMatch(/Firecrawl key rejected \(401\)/);
+    expect(body.searches).toHaveLength(3);
+    expect(body.summary_text).toMatch(/Nothing was added to this briefing:.*Firecrawl key rejected/);
   });
 });

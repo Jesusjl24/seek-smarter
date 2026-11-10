@@ -31,3 +31,22 @@ export class ProviderRequestError extends Error {
     this.possibleBlocking = opts.possibleBlocking ?? false;
   }
 }
+
+/** Strip tokens and long secrets from a message that may be shown in an API or briefing. */
+export function sanitizePublicError(message: string): string {
+  return String(message ?? "")
+    .replace(/\bBearer\s+[A-Za-z0-9._\-+=\/]+/gi, "Bearer [redacted]")
+    .replace(/\b(?:authorization|api[_-]?key)\s*[:=]\s*["']?[^\s"',}]+/gi, (match) => match.split(/[:=]/)[0] + "=[redacted]")
+    .replace(/\b(?:sk-|xai-|fc-)[A-Za-z0-9._-]{8,}/g, "[redacted]")
+    .replace(/\b[A-Fa-f0-9]{32,}\b/g, "[redacted]")
+    .trim();
+}
+
+export function uniqueSanitizedReasons(reasons: Array<string | null | undefined>): string[] {
+  const out: string[] = [];
+  for (const reason of reasons) {
+    const clean = sanitizePublicError(String(reason ?? ""));
+    if (clean && !out.includes(clean)) out.push(clean);
+  }
+  return out;
+}
