@@ -2,7 +2,7 @@ import path from "node:path";
 
 export interface Config {
   host: string; port: number; databasePath: string; uploadDir: string; jwtSecret: string;
-  authAllowSignup: boolean; secureCookies: boolean; corsOrigin: string; agentToken?: string;
+  authAllowSignup: boolean; secureCookies: boolean; corsOrigin: string; agentToken?: string; agentUserId?: string;
   pipelineCron: string; aiProvider: "openai" | "gemini"; openaiApiKey?: string;
   openaiBaseUrl: string; openaiModel: string; geminiApiKey?: string; geminiModel: string;
   firecrawlApiKey?: string; nodeEnv: string;
@@ -16,7 +16,7 @@ export function loadConfig(env = process.env): Config {
     jwtSecret: env.JWT_SECRET || "development-only-change-me",
     authAllowSignup: (env.AUTH_ALLOW_SIGNUP || "true").toLowerCase() === "true",
     secureCookies: (env.COOKIE_SECURE || "").toLowerCase() === "true" || env.NODE_ENV === "production" && (env.PUBLIC_URL || "").startsWith("https:"),
-    corsOrigin: env.CORS_ORIGIN || "http://localhost:8080", agentToken: env.AGENT_API_TOKEN,
+    corsOrigin: env.CORS_ORIGIN || "http://localhost:8080", agentToken: env.AGENT_API_TOKEN, agentUserId: env.AGENT_USER_ID,
     pipelineCron: env.PIPELINE_CRON || "0 * * * *", aiProvider: env.AI_PROVIDER === "gemini" ? "gemini" : "openai",
     openaiApiKey: env.OPENAI_API_KEY, openaiBaseUrl: env.OPENAI_BASE_URL || "https://api.openai.com/v1",
     openaiModel: env.OPENAI_MODEL || "gpt-4o-mini", geminiApiKey: env.GEMINI_API_KEY,
