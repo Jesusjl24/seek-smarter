@@ -10,7 +10,7 @@ The Today page shows graded inbox/shortlist jobs and can manually run the signed
 
 ## Self-hosting and scheduling
 
-Copy `.env.example` to `.env`. Configure a strong `JWT_SECRET`, an AI provider (`OPENAI_API_KEY` or `GEMINI_API_KEY`), and optionally `FIRECRAWL_API_KEY`. Existing process environment values take precedence over `.env`.
+Copy `.env.example` to `.env`. Configure a strong `JWT_SECRET`, the default xAI provider (`XAI_API_KEY`, optional `XAI_MODEL` defaulting to `grok-4.3`), and `FIRECRAWL_API_KEY` for reliable SEEK scraping. OpenAI and Gemini remain alternatives via `AI_PROVIDER`. Existing process environment values take precedence over `.env`.
 
 ```bash
 npm install

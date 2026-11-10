@@ -1,6 +1,6 @@
 import type Database from "better-sqlite3";
 import { randomUUID } from "node:crypto";
-import type { Config } from "../config.js";
+import { aiKeyName, hasAiKey, type Config } from "../config.js";
 import { scrapeSeek } from "./seekScrape.js";
 import { scoreJob } from "./scoreJob.js";
 import { isValidJob } from "./seekEnrich.js";
@@ -39,9 +39,9 @@ export async function runPipeline(db: Database.Database, config: Config, userId:
             .run(job.title, job.company, job.location || "", job.salary_range || null, job.work_type || null, job.work_arrangement || null, job.description_snippet || "", job.full_description || null, job.job_url, new Date().toISOString(), exists.id, userId);
         }
       }
-      if (!config.openaiApiKey && !config.geminiApiKey) {
-        reasons.push(`Scoring skipped: ${config.aiProvider === "gemini" ? "GEMINI_API_KEY" : "OPENAI_API_KEY"} is not configured`);
-        reasons.push(`Drafting skipped: ${config.aiProvider === "gemini" ? "GEMINI_API_KEY" : "OPENAI_API_KEY"} is not configured`);
+      if (!hasAiKey(config)) {
+        reasons.push(`Scoring skipped: ${aiKeyName(config)} is not configured`);
+        reasons.push(`Drafting skipped: ${aiKeyName(config)} is not configured`);
       } else {
         const jobs = db.prepare("SELECT id FROM jobs WHERE user_id=? AND search_profile_id=? AND id NOT IN (SELECT job_id FROM job_matches WHERE user_id=?) LIMIT 25").all(userId, p.id, userId) as any[];
         for (const job of jobs) {

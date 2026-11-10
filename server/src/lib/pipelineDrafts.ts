@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type Database from "better-sqlite3";
-import type { Config } from "../config.js";
+import { aiKeyName, hasAiKey, type Config } from "../config.js";
 import { canonicalJson, coverLetter, sha256, tailorResume, type DraftPreferences, type DraftProfile } from "./tailorDrafts.js";
 
 type DraftableJob = { id: string; grade: string; match_score: number; title: string; company: string; location: string; description_snippet: string; full_description?: string | null; updated_at?: string };
@@ -34,7 +34,7 @@ function persistDraft(db: Database.Database, userId: string, jobId: string, type
 export async function draftAGradePackages(db: Database.Database, config: Config, userId: string, jobs: DraftableJob[], opts: GeneratorOptions = {}): Promise<DraftResult> {
   const result: DraftResult = { jobs_drafted: 0, skipped: [], errors: [] }, limit = Math.min(opts.limit ?? 3, 3);
   if (limit <= 0) return result;
-  if (!config.openaiApiKey && !config.geminiApiKey) { result.skipped.push(`Drafting skipped: ${config.aiProvider === "gemini" ? "GEMINI_API_KEY" : "OPENAI_API_KEY"} is not configured`); return result; }
+  if (!opts.generateResume && !opts.generateCover && !hasAiKey(config)) { result.skipped.push(`Drafting skipped: ${aiKeyName(config)} is not configured`); return result; }
   const profile = db.prepare("SELECT * FROM resume_profile WHERE user_id=? AND trim(raw_text)<>'' LIMIT 1").get(userId) as DraftProfile | undefined;
   const approved = db.prepare("SELECT id,raw_text FROM resume_revisions WHERE user_id=? AND approved_at IS NOT NULL ORDER BY revision_number DESC LIMIT 1").get(userId) as any;
   const draftProfile: DraftProfile | undefined = profile || (approved ? { raw_text: approved.raw_text } : undefined);

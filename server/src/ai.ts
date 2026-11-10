@@ -1,5 +1,6 @@
-import type { Config } from "./config.js";
+import { aiKeyName, type Config } from "./config.js";
 export class AIUnavailableError extends Error { status = 503; missing: string; constructor(missing: string) { super("AI is not configured"); this.missing = missing; } }
+
 export async function chatJson(config: Config, input: { system: string; user: string; temperature?: number }) {
   if (config.aiProvider === "gemini") {
     if (!config.geminiApiKey) throw new AIUnavailableError("GEMINI_API_KEY");
@@ -8,8 +9,15 @@ export async function chatJson(config: Config, input: { system: string; user: st
     if (!response.ok) throw new Error(`Gemini request failed (${response.status})`);
     const data: any = await response.json(); return JSON.parse(data.candidates?.[0]?.content?.parts?.[0]?.text || "{}");
   }
-  if (!config.openaiApiKey) throw new AIUnavailableError("OPENAI_API_KEY");
-  const response = await fetch(`${config.openaiBaseUrl.replace(/\/$/, "")}/chat/completions`, { method: "POST", headers: { authorization: `Bearer ${config.openaiApiKey}`, "content-type": "application/json" }, body: JSON.stringify({ model: config.openaiModel, response_format: { type: "json_object" }, temperature: input.temperature ?? 0.2, messages: [{ role: "system", content: input.system }, { role: "user", content: input.user }] }) });
-  if (!response.ok) throw new Error(`OpenAI-compatible request failed (${response.status})`);
-  const data: any = await response.json(); return JSON.parse(data.choices?.[0]?.message?.content || "{}");
+  const isXai = config.aiProvider !== "openai";
+  const apiKey = isXai ? config.xaiApiKey : config.openaiApiKey;
+  const missing = aiKeyName(config);
+  if (!apiKey) throw new AIUnavailableError(missing);
+  const baseUrl = (isXai ? config.xaiBaseUrl : config.openaiBaseUrl).replace(/\/$/, "");
+  const model = isXai ? config.xaiModel : config.openaiModel;
+  const response = await fetch(`${baseUrl}/chat/completions`, { method: "POST", headers: { authorization: `Bearer ${apiKey}`, "content-type": "application/json" }, body: JSON.stringify({ model, response_format: { type: "json_object" }, temperature: input.temperature ?? 0.2, messages: [{ role: "system", content: input.system }, { role: "user", content: input.user }] }) });
+  if (!response.ok) throw new Error(`${isXai ? "xAI" : "OpenAI-compatible"} request failed (${response.status})`);
+  const data: any = await response.json();
+  const raw = String(data.choices?.[0]?.message?.content || "").replace(/```json\n?|\n?```/g, "").trim();
+  return JSON.parse(raw.match(/\{[\s\S]*\}/)?.[0] || raw || "{}");
 }

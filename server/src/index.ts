@@ -19,7 +19,12 @@ if(!process.env.JWT_SECRET){
   Object.assign(config, loadConfig());
 }
 const db=openDatabase(config.databasePath);let agentToken=config.agentToken;
-if(!agentToken){agentToken=randomBytes(32).toString("hex");const tokenPath=path.resolve("data/agent-token.txt");fs.mkdirSync(path.dirname(tokenPath),{recursive:true});fs.writeFileSync(tokenPath,agentToken,{mode:0o600});fs.chmodSync(tokenPath,0o600);console.log(`[agent] token written to ${tokenPath}`);}
+if(!agentToken){
+  const tokenPath=path.resolve("data/agent-token.txt");
+  fs.mkdirSync(path.dirname(tokenPath),{recursive:true});
+  if(fs.existsSync(tokenPath)) agentToken=fs.readFileSync(tokenPath,"utf8").trim();
+  else { agentToken=randomBytes(32).toString("hex"); fs.writeFileSync(tokenPath,agentToken,{mode:0o600}); fs.chmodSync(tokenPath,0o600); console.log(`[agent] token written to ${tokenPath}`); }
+}
 const app=createApp({db,config,agentToken});
 if(config.nodeEnv==="production"){app.use("/*",serveStatic({root:"./dist"}));app.get("/*",serveStatic({path:"./dist/index.html"}));}
 startCron(db,config);serve({fetch:app.fetch,hostname:config.host,port:config.port},info=>console.log(`Seek Smarter listening on http://${info.address}:${info.port}`));
