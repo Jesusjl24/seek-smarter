@@ -1,73 +1,64 @@
-# Welcome to your Lovable project
+# Seek Smarter
 
-## Project info
+A self-hosted React/Vite job-search workspace with a lightweight Hono API, SQLite, local authentication and local file storage. It no longer requires Lovable Cloud or Supabase.
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+## Self-hosting
 
-## How can I edit this code?
-
-There are several ways of editing your application.
-
-**Use Lovable**
-
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
-
-Changes made via Lovable will be committed automatically to this repo.
-
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
+Requirements: Node.js 22+ and npm. Native build tools are needed when `better-sqlite3` does not have a prebuilt binary for your platform.
 
 ```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
+cp .env.example .env
+# Set a strong JWT_SECRET and optionally an AI provider key.
+npm install
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+Development runs Vite at `http://localhost:8080` and the API at `http://localhost:3100`; Vite proxies `/api` and `/uploads`. Create the first account from the Sign Up tab. The first account can always be created. Later signups follow `AUTH_ALLOW_SIGNUP`, which defaults to `true`; set it to `false` after creating your owner account if desired.
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+For production:
 
-**Use GitHub Codespaces**
+```sh
+npm run build
+npm start
+```
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+The production server serves `dist/` on `PORT` (3100 by default). SQLite defaults to `data/seek-smarter.db`, uploads to `data/uploads`, and migrations run automatically. Back up the whole `data/` directory. Files require authentication and paths are restricted to their owner.
 
-## What technologies are used for this project?
+### Docker
 
-This project is built with:
+```sh
+docker build -t seek-smarter .
+docker run --rm -p 3100:3100 --env-file .env \
+  -v "$PWD/data:/app/data" seek-smarter
+```
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+Use `COOKIE_SECURE=true` behind HTTPS. Never put secrets into the image or repository.
 
-## How can I deploy this project?
+### AI, scraping, and cron
 
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
+Set `AI_PROVIDER=openai` with `OPENAI_API_KEY`; `OPENAI_BASE_URL` can target an OpenAI-compatible service. Alternatively use `AI_PROVIDER=gemini` with `GEMINI_API_KEY`. Missing keys produce a clear 503 for interactive generation, while pipelines complete and record the skipped reason. SEEK scraping makes a best-effort direct request when `FIRECRAWL_API_KEY` is absent and reports likely blocking without crashing.
 
-## Can I connect a custom domain to my Lovable project?
+The scheduler uses `PIPELINE_CRON` (`0 * * * *` by default). Set it to `off` to disable it. Scheduled and manual runs share the same pipeline. The assistant never auto-applies: drafts remain pending for explicit approval.
 
-Yes, you can!
+### Agent polling
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+Set `AGENT_API_TOKEN`, or the server creates one in `data/agent-token.txt` with mode 0600 and logs only that path.
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+```sh
+curl -H "Authorization: Bearer $AGENT_API_TOKEN" \
+  "http://localhost:3100/api/agent/matches?since=2026-01-01T00:00:00Z&min_grade=B"
+```
+
+The old agent HMAC credential, nonce, request-log, usage and rate-limit tables are intentionally omitted; this endpoint uses the static token instead.
+
+### Migrating from Lovable/Supabase
+
+Remote data is not copied automatically. Export the records you need, transform JSON/array columns to JSON text, and import them into matching SQLite tables while preserving `user_id`. Copy private files into `data/uploads/<user-id>/...` and update stored paths. The committed Supabase directory remains only as historical reference; runtime code does not import it.
+
+## Commands
+
+- `npm run dev` — frontend and API with reload
+- `npm run build` — Vite build plus server type-check
+- `npm start` — production API and static frontend
+- `npm test` — frontend and server Vitest suites
+- `npm run lint` — ESLint
