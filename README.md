@@ -13,6 +13,8 @@ npm install
 npm run dev
 ```
 
+The server reads `.env` from its working directory. Values already present in `process.env` take precedence, so injected deployment secrets are never replaced by file values.
+
 Development runs Vite at `http://localhost:8080` and the API at `http://localhost:3100`; Vite proxies `/api` and `/uploads`. Create the first account from the Sign Up tab. The first account can always be created. Later signups follow `AUTH_ALLOW_SIGNUP`, which defaults to `true`; set it to `false` after creating your owner account if desired.
 
 For production:
@@ -42,7 +44,7 @@ The scheduler uses `PIPELINE_CRON` (`0 * * * *` by default). Set it to `off` to 
 
 ### Agent polling
 
-Set `AGENT_API_TOKEN`, or the server creates one in `data/agent-token.txt` with mode 0600 and logs only that path.
+Set `AGENT_API_TOKEN`, or the server creates one in `data/agent-token.txt` with mode 0600 and logs only that path. The token binds to the sole/first account. If the installation has multiple unbound accounts, set `AGENT_USER_ID` to the account id the agent may read.
 
 ```sh
 curl -H "Authorization: Bearer $AGENT_API_TOKEN" \

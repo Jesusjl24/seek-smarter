@@ -7,7 +7,9 @@ import { loadConfig } from "./config.js";
 import { openDatabase } from "./db.js";
 import { createApp } from "./app.js";
 import { startCron } from "./cron.js";
+import { loadEnv } from "./loadEnv.js";
 
+loadEnv();
 const config=loadConfig();
 if(!process.env.JWT_SECRET){
   const secretPath=path.resolve("data/jwt-secret.txt");
