@@ -18,6 +18,7 @@ if(!process.env.JWT_SECRET){
   else { const secret=randomBytes(32).toString("hex"); fs.writeFileSync(secretPath,secret,{mode:0o600}); fs.chmodSync(secretPath,0o600); process.env.JWT_SECRET=secret; console.log(`[auth] JWT secret written to ${secretPath}`); }
   Object.assign(config, loadConfig());
 }
+fs.mkdirSync(config.uploadDir,{recursive:true});
 const db=openDatabase(config.databasePath);let agentToken=config.agentToken;
 if(!agentToken){
   const tokenPath=path.resolve("data/agent-token.txt");
