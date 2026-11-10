@@ -7,10 +7,7 @@
  * approval until it is evidenced or manually accepted.
  *
  * This module is pure (no I/O, no framework) so it can run in the browser,
- * in an edge function, and in tests.
- *
- * NOTE: an identical copy lives at supabase/functions/_shared/truthCheck.ts
- * so the server can re-run the same check authoritatively. Keep them in sync.
+ * on the server, and in tests.
  */
 
 export type TruthCheckStatus =

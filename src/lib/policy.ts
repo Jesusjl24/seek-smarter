@@ -1,6 +1,4 @@
 // Single source of truth for turning a match score into a recommendation band.
-// Mirrored (intentionally duplicated, Deno cannot import from src/) in
-// supabase/functions/_shared/policy.ts — keep both in sync.
 
 import { DEFAULT_POLICY, type ScorePolicy } from "@/types/preferences";
 

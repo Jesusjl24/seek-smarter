@@ -1,5 +1,5 @@
-// Deterministic dealbreaker evaluation. Runs BEFORE any model call and never
-// uses model output. Mirrored in supabase/functions/_shared/dealbreakers.ts.
+// Deterministic dealbreaker evaluation. Runs before any model call and never
+// uses model output.
 
 import type { CandidatePreferences } from "@/types/preferences";
 

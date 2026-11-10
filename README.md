@@ -1,6 +1,6 @@
 # Seek Smarter
 
-A self-hosted React/Vite job-search workspace with a lightweight Hono API, SQLite, local authentication and local file storage. It no longer requires Lovable Cloud or Supabase.
+A self-hosted React/Vite job-search workspace with a lightweight Hono API, SQLite, local authentication and local file storage.
 
 ## Self-hosting
 
@@ -51,11 +51,7 @@ curl -H "Authorization: Bearer $AGENT_API_TOKEN" \
   "http://localhost:3100/api/agent/matches?since=2026-01-01T00:00:00Z&min_grade=B"
 ```
 
-The old agent HMAC credential, nonce, request-log, usage and rate-limit tables are intentionally omitted; this endpoint uses the static token instead.
-
-### Migrating from Lovable/Supabase
-
-Remote data is not copied automatically. Export the records you need, transform JSON/array columns to JSON text, and import them into matching SQLite tables while preserving `user_id`. Copy private files into `data/uploads/<user-id>/...` and update stored paths. The committed Supabase directory remains only as historical reference; runtime code does not import it.
+The endpoint uses the static token and returns only the bound user's inbox/shortlist matches.
 
 ## Commands
 
