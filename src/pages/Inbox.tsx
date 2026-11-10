@@ -7,7 +7,7 @@ import { ReviewQueue } from "@/components/jobs/ReviewQueue";
 import { PolicyBar } from "@/components/policy/PolicyBar";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { supabase } from "@/integrations/supabase/client";
+import { apiPost } from "@/lib/api/client";
 import { isGuest, guestScoreJob } from "@/lib/guest";
 import { fetchPreferences } from "@/lib/api/preferences";
 import { classifyScore } from "@/lib/policy";
@@ -121,8 +121,7 @@ const Inbox = () => {
       return;
     }
     try {
-      const { data, error } = await supabase.functions.invoke("scrape-seek", {
-        body: {
+      const data = await apiPost<any>("/api/jobs/scrape", {
           keywords: filters.keywords,
           location: filters.location,
           limit: parseInt(filters.jobLimit) || 20,
@@ -134,10 +133,7 @@ const Inbox = () => {
             salaryType: filters.salaryType,
             datePosted: filters.datePosted,
           },
-        },
       });
-
-      if (error) throw error;
 
       if (!data.jobs || data.jobs.length === 0) {
         const diagnostics = data.diagnostics;
@@ -219,12 +215,7 @@ const Inbox = () => {
         if (isGuest()) {
           data = await guestScoreJob(job, prefs) as typeof data;
         } else {
-          const res = await supabase.functions.invoke("score-job", {
-            body: { job, profile },
-          });
-          if (res.error) throw res.error;
-          if (res.data?.error) throw new Error(res.data.error);
-          data = res.data;
+          data = await apiPost(`/api/jobs/${job.id}/score`, { job, profile });
         }
 
         await saveJobMatch({
@@ -323,11 +314,8 @@ const Inbox = () => {
         if (isGuest()) {
           data = await guestScoreJob(job, prefs) as typeof data;
         } else {
-          const res = await supabase.functions.invoke("score-job", {
-            body: { job, profile },
-          });
-          if (res.error || res.data?.error) { failed++; continue; }
-          data = res.data;
+          try { data = await apiPost(`/api/jobs/${job.id}/score`, { job, profile }); }
+          catch { failed++; continue; }
         }
 
         await saveJobMatch({

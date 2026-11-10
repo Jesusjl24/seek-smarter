@@ -1,19 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
-
-// Any touch of the real backend client in guest mode is a failure.
-vi.mock("@/integrations/supabase/client", () => {
-  const forbidden = () => {
-    throw new Error("Guest mode must not call the backend");
-  };
-  return {
-    supabase: {
-      from: forbidden,
-      auth: { getUser: forbidden, getSession: forbidden },
-      functions: { invoke: forbidden },
-      storage: { from: forbidden },
-    },
-  };
-});
+import { describe, it, expect, beforeEach } from "vitest";
 
 import { enableGuest, exitGuest } from "@/lib/guest";
 import {

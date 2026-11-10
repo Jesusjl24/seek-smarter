@@ -4,7 +4,7 @@
 import { fetchJobs, fetchArtifactsForJobs } from "@/lib/api/jobs";
 import { fetchResumeProfile } from "@/lib/api/resume";
 import { fetchPreferences } from "@/lib/api/preferences";
-import { supabase } from "@/integrations/supabase/client";
+import { apiGet } from "@/lib/api/client";
 import { classifyScore, BAND_LABELS } from "@/lib/policy";
 import type { ScorePolicy } from "@/types/preferences";
 import type { JobArtifact, JobWithMatch } from "@/types/job";
@@ -177,8 +177,7 @@ export async function fetchAssistantSnapshot(): Promise<AssistantSnapshot> {
     fetchPreferences(),
   ]);
   const artifacts = await fetchArtifactsForJobs(jobs.map((j) => j.id));
-  const { data: documentRevisions, error } = jobs.length ? await supabase.from("document_revisions").select("job_id,document_type,approval_status").in("job_id", jobs.map((job) => job.id)).in("approval_status", ["pending", "approved"]) : { data: [], error: null };
-  if (error) throw error;
+  const { documentRevisions } = jobs.length ? await apiGet<{ documentRevisions: Array<{ job_id: string | null; document_type: string; approval_status: string }> }>("/api/assistant/snapshot") : { documentRevisions: [] };
   return buildAssistantSnapshot({
     jobs,
     artifacts,

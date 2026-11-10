@@ -1,0 +1,2 @@
+export interface DealbreakerResult{hits:string[]}
+export function evaluateDealbreakers(job:{title?:string;location?:string},prefs:{excluded_titles?:string[];locations?:string[]}):DealbreakerResult{const hits:string[]=[];if(prefs.excluded_titles?.some(t=>job.title?.toLowerCase().includes(t.toLowerCase())))hits.push("Excluded title");if(prefs.locations?.length&&job.location&&!prefs.locations.some(l=>job.location!.toLowerCase().includes(l.toLowerCase())))hits.push("Location outside preferences");return{hits}}

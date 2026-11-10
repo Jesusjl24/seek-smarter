@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { supabase } from "@/integrations/supabase/client";
+import { apiPost } from "@/lib/api/client";
 import { saveResumeProfile, uploadResumeFile, deleteResumeProfile } from "@/lib/api/resume";
 import { ResumeViewModal } from "./ResumeViewModal";
 import type { ResumeProfile } from "@/types/job";
@@ -63,7 +63,7 @@ export function ResumeUpload({ profile, onProfileUpdate }: ResumeUploadProps) {
     setIsUploading(true);
 
     try {
-      // Step 1: Upload file to Supabase Storage
+      // Step 1: Upload file to local storage
       const { path: filePath } = await uploadResumeFile(file);
       
       // Step 2: Convert file to base64 for AI parsing
@@ -78,15 +78,11 @@ export function ResumeUpload({ profile, onProfileUpdate }: ResumeUploadProps) {
       });
 
       // Step 3: Call edge function to parse resume
-      const { data, error } = await supabase.functions.invoke("parse-resume", {
-        body: {
-          fileContent: base64,
-          fileName: file.name,
-          fileType: file.type,
-        },
+      const data = await apiPost<Record<string, unknown>>("/api/resume/parse", {
+        text: base64,
+        fileName: file.name,
+        fileType: file.type,
       });
-
-      if (error) throw error;
 
       // Step 4: Save parsed profile with file URL to database
       const savedProfile = await saveResumeProfile({
