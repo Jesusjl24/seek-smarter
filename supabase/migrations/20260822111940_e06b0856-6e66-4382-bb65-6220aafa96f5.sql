@@ -1,1 +1,0 @@
-DELETE FROM public.document_revisions WHERE id = 'b8c34c1c-067f-4053-a445-09ae50b1426f';

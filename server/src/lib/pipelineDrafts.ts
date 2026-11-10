@@ -11,10 +11,14 @@ export type DraftResult = { jobs_drafted: number; skipped: string[]; errors: str
 
 function recordTask(db: Database.Database, userId: string, jobId: string, taskType: "tailor_resume" | "cover_letter", status: "pending" | "succeeded", message?: string) {
   const key = `pipeline:${jobId}:${taskType}`;
-  const duplicate = db.prepare("SELECT id FROM assistant_tasks WHERE user_id=? AND task_type=? AND status IN ('pending','succeeded') AND json_extract(payload,'$.idempotency_key')=? LIMIT 1").get(userId, taskType, key);
-  if (duplicate) return;
   const timestamp = new Date().toISOString();
   const payload = JSON.stringify({ job_id: jobId, idempotency_key: key, ...(message ? { error: message } : {}) });
+  const existing = db.prepare("SELECT id,status FROM assistant_tasks WHERE user_id=? AND task_type=? AND status IN ('pending','succeeded') AND json_extract(payload,'$.idempotency_key')=? ORDER BY created_at DESC LIMIT 1").get(userId, taskType, key) as any;
+  if (existing) {
+    if (existing.status === "succeeded") return;
+    db.prepare("UPDATE assistant_tasks SET status=?,payload=?,result=?,updated_at=? WHERE id=?").run(status, payload, JSON.stringify(message ? { error: message } : { drafted: true }), timestamp, existing.id);
+    return;
+  }
   db.prepare("INSERT INTO assistant_tasks(id,user_id,task_type,status,payload,result,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)").run(randomUUID(), userId, taskType, status, payload, JSON.stringify(message ? { error: message } : { drafted: true }), timestamp, timestamp);
 }
 
