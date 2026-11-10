@@ -1,5 +1,6 @@
 import type { Config } from "../config.js";
 import { enrichJobsFromIdsWithFallback, type ScrapedJob } from "./seekEnrich.js";
+import { peekErrorBody, providerErrorMessage, ProviderRequestError } from "./providerErrors.js";
 
 const UA = "Mozilla/5.0 (compatible; SeekSmarter/1.0; self-hosted job search)";
 
@@ -20,22 +21,26 @@ async function discoverIds(config: Config, input: any): Promise<{ ids: string[];
       headers: { authorization: `Bearer ${config.firecrawlApiKey}`, "content-type": "application/json" },
       body: JSON.stringify({ url, formats: ["markdown", "links"], waitFor: 2500, timeout: 30000, location: { country: "AU", languages: ["en-AU"] }, onlyMainContent: true }),
     });
-    if (firecrawl.ok) {
-      const payload: any = await firecrawl.json();
-      const data = payload.data || payload;
-      const text = `${data.markdown || ""} ${(data.links || []).join(" ")}`;
-      const ids = extractIds(text).slice(0, limit);
-      return { ids, source: "firecrawl", message: ids.length ? undefined : "Firecrawl returned no parseable SEEK links." };
+    if (!firecrawl.ok) {
+      const body = await peekErrorBody(firecrawl);
+      throw new ProviderRequestError(providerErrorMessage("Firecrawl", firecrawl.status, body), { status: firecrawl.status, source: "firecrawl", possibleBlocking: false });
     }
+    const payload: any = await firecrawl.json();
+    const data = payload.data || payload;
+    const text = `${data.markdown || ""} ${(data.links || []).join(" ")}`;
+    const ids = extractIds(text).slice(0, limit);
+    return { ids, source: "firecrawl", message: ids.length ? undefined : "Firecrawl returned no parseable SEEK links." };
   }
 
   const response = await fetch(url, { headers: { "user-agent": UA, accept: "text/html" }, redirect: "follow" });
-  if (!response.ok) throw new Error(`SEEK returned ${response.status}`);
+  if (!response.ok) {
+    throw new ProviderRequestError(`SEEK returned ${response.status}. Configure FIRECRAWL_API_KEY for reliable scraping.`, { status: response.status, source: "direct", possibleBlocking: true });
+  }
   const ids = extractIds(await response.text()).slice(0, limit);
   return {
     ids,
-    source: config.firecrawlApiKey ? "direct_fallback" : "direct",
-    message: ids.length ? undefined : "SEEK returned no parseable job links; it may be blocking automated requests.",
+    source: "direct",
+    message: ids.length ? undefined : "SEEK returned no parseable job links; it may be blocking automated requests. Configure FIRECRAWL_API_KEY for reliable scraping.",
   };
 }
 
@@ -50,11 +55,23 @@ export async function scrapeSeek(config: Config, input: any): Promise<{ jobs: Sc
         source: discovered.source,
         job_ids_found: discovered.ids.length,
         jobs_enriched: enrichedCount,
-        possible_blocking: discovered.ids.length === 0,
+        possible_blocking: discovered.ids.length === 0 && discovered.source !== "firecrawl",
         message: jobs.length ? undefined : discovered.message || "Job IDs were found but detail pages could not be enriched.",
       },
     };
   } catch (error) {
+    if (error instanceof ProviderRequestError) {
+      return {
+        jobs: [],
+        diagnostics: {
+          source: error.source,
+          provider: error.source === "firecrawl" ? "firecrawl" : undefined,
+          status: error.status,
+          possible_blocking: error.possibleBlocking,
+          message: error.message,
+        },
+      };
+    }
     return { jobs: [], diagnostics: { possible_blocking: true, message: error instanceof Error ? error.message : "SEEK request failed" } };
   }
 }

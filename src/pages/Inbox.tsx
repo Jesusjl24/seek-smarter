@@ -137,10 +137,16 @@ const Inbox = () => {
 
       if (!data.jobs || data.jobs.length === 0) {
         const diagnostics = data.diagnostics;
-        if (diagnostics?.possible_blocking) {
+        if (diagnostics?.message && !diagnostics?.possible_blocking) {
+          toast({
+            title: "Scrape failed",
+            description: diagnostics.message,
+            variant: "destructive",
+          });
+        } else if (diagnostics?.possible_blocking) {
           toast({
             title: "Search blocked",
-            description: "SEEK may be blocking automated searches. Please try again in a few minutes.",
+            description: diagnostics.message || "SEEK may be blocking automated searches. Please try again in a few minutes.",
             variant: "destructive",
           });
         } else if (diagnostics?.job_ids_found === 0) {
