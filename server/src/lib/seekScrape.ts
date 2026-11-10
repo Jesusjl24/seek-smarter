@@ -1,6 +1,7 @@
 import type { Config } from "../config.js";
 import { enrichJobsFromIdsWithFallback, type ScrapedJob } from "./seekEnrich.js";
 import { peekErrorBody, providerErrorMessage, ProviderRequestError } from "./providerErrors.js";
+import { firecrawlScrape, locationDiscoveryGapMs } from "./firecrawl.js";
 
 const UA = "Mozilla/5.0 (compatible; SeekSmarter/1.0; self-hosted job search)";
 
@@ -34,11 +35,7 @@ export async function discoverIds(config: Config, input: any): Promise<{ ids: st
   const limit = Number(input.jobLimit || input.limit || 20);
 
   if (config.firecrawlApiKey) {
-    const firecrawl = await fetch("https://api.firecrawl.dev/v1/scrape", {
-      method: "POST",
-      headers: { authorization: `Bearer ${config.firecrawlApiKey}`, "content-type": "application/json" },
-      body: JSON.stringify({ url, formats: ["markdown", "links"], waitFor: 2500, timeout: 30000, location: { country: "AU", languages: ["en-AU"] }, onlyMainContent: true }),
-    });
+    const firecrawl = await firecrawlScrape(config.firecrawlApiKey, { url, formats: ["markdown", "links"], waitFor: 2500, timeout: 30000, location: { country: "AU", languages: ["en-AU"] }, onlyMainContent: true });
     if (!firecrawl.ok) {
       const body = await peekErrorBody(firecrawl);
       throw new ProviderRequestError(providerErrorMessage("Firecrawl", firecrawl.status, body), { status: firecrawl.status, source: "firecrawl", possibleBlocking: false });
@@ -65,7 +62,13 @@ export async function discoverIds(config: Config, input: any): Promise<{ ids: st
 export async function scrapeSeek(config: Config, input: any): Promise<{ jobs: ScrapedJob[]; diagnostics: any }> {
   try {
     const locations: string[] = input.locations?.length ? input.locations : [input.location].filter(Boolean);
-    const discoveries = await Promise.all((locations.length ? locations : [undefined]).map((location) => discoverIds(config, { ...input, location, workArrangement: isRemoteLocation(location) ? 'remote' : undefined })));
+    const targets = locations.length ? locations : [undefined];
+    const discoveries = [];
+    const gap = locationDiscoveryGapMs();
+    for (const location of targets) {
+      if (discoveries.length && gap) await new Promise((resolve) => setTimeout(resolve, gap));
+      discoveries.push(await discoverIds(config, { ...input, location, workArrangement: isRemoteLocation(location) ? "remote" : undefined }));
+    }
     const discovered = { ids: [...new Set(discoveries.flatMap((item) => item.ids))], source: discoveries.map((item) => item.source).join("+"), message: [...new Set(discoveries.map((item) => item.message).filter(Boolean))].join(" ") || undefined };
     const cap = Math.min(8, Number(input.jobLimit || input.limit || 8));
     const { jobs, enrichedCount } = await enrichJobsFromIdsWithFallback(discovered.ids, config.firecrawlApiKey, cap);

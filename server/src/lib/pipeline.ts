@@ -10,6 +10,7 @@ import { deterministicFilter } from "./dealbreakers.js";
 import { chatJson } from "../ai.js";
 import { decodeRow } from "../db.js";
 import { uniqueSanitizedReasons } from "./providerErrors.js";
+import { pipelineSearchGapMs } from "./firecrawl.js";
 
 const sydneyDate = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Australia/Sydney", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
 
@@ -21,7 +22,10 @@ export async function runPipeline(db: Database.Database, config: Config, userId:
   const results: any[] = [];
   let packagesDrafted = 0;
   const touched = new Set<string>();
+  const searchGap = pipelineSearchGapMs();
   for (const p of profiles) {
+    if (results.length && searchGap) await new Promise((resolve) => setTimeout(resolve, searchGap));
+
     const id = randomUUID(), started = new Date().toISOString();
     db.prepare("INSERT INTO pipeline_runs(id,user_id,search_profile_id,status,started_at) VALUES(?,?,?,?,?)").run(id, userId, p.id, "running", started);
     let found = 0, added = 0, scored = 0, hidden = 0, strong = 0;

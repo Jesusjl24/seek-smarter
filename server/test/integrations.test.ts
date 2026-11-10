@@ -7,6 +7,7 @@ import type { Config } from "../src/config.js";
 import { scrapeSeek } from "../src/lib/seekScrape.js";
 import { chatJson } from "../src/ai.js";
 import { clearIntegrationsHealthCache } from "../src/lib/integrationsHealth.js";
+import { setFirecrawlSleepForTests } from "../src/lib/firecrawl.js";
 
 const baseConfig: Config = {
   host: "127.0.0.1", port: 3100, databasePath: ":memory:", uploadDir: "/tmp/seek-smarter-test",
@@ -19,6 +20,7 @@ const baseConfig: Config = {
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
+  setFirecrawlSleepForTests();
   clearIntegrationsHealthCache();
 });
 
@@ -80,5 +82,41 @@ describe("GET /api/health/integrations", () => {
     expect(body.firecrawl).toEqual({ configured: false, valid: null });
     expect(typeof body.checked_at).toBe("string");
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("Firecrawl 429 retries", () => {
+  it("retries a Firecrawl 429 and then succeeds", async () => {
+    setFirecrawlSleepForTests(async () => {});
+    let firecrawlCalls = 0;
+    const fetchMock = vi.fn(async (input: any) => {
+      const url = String(input);
+      if (url.includes("firecrawl.dev")) {
+        firecrawlCalls++;
+        if (firecrawlCalls === 1) return new Response("rate limited", { status: 429, headers: { "retry-after": "0" } });
+        return new Response(JSON.stringify({ data: { markdown: "see /job/1234567", links: ["https://www.seek.com.au/job/1234567"] } }), { status: 200 });
+      }
+      return new Response("unexpected", { status: 500 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const result = await scrapeSeek({ ...baseConfig, firecrawlApiKey: "test-firecrawl-key" }, { keywords: "operations manager", location: "Sydney" });
+    expect(firecrawlCalls).toBeGreaterThanOrEqual(2);
+    expect(result.diagnostics.status).not.toBe(429);
+    expect(result.diagnostics.job_ids_found).toBe(1);
+  });
+
+  it("surfaces Firecrawl request failed (429) after retries are exhausted", async () => {
+    setFirecrawlSleepForTests(async () => {});
+    const fetchMock = vi.fn(async (input: any) => {
+      if (String(input).includes("firecrawl.dev")) return new Response("rate limited", { status: 429, headers: { "retry-after": "0" } });
+      return new Response("unexpected", { status: 500 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const result = await scrapeSeek({ ...baseConfig, firecrawlApiKey: "test-firecrawl-key" }, { keywords: "operations manager", location: "Sydney" });
+    expect(result.jobs).toEqual([]);
+    expect(result.diagnostics.message).toBe("Firecrawl request failed (429)");
+    expect(result.diagnostics.status).toBe(429);
+    expect(fetchMock.mock.calls.filter((c) => String(c[0]).includes("firecrawl.dev")).length).toBe(4);
+    expect(fetchMock.mock.calls.some((c) => String(c[0]).includes("seek.com.au"))).toBe(false);
   });
 });

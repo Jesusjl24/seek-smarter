@@ -1,3 +1,4 @@
+import { firecrawlScrape } from "./firecrawl.js";
 export interface ScrapedJob {
   seek_job_id: string;
   title: string;
@@ -70,7 +71,7 @@ export function parseJobDetailPage(jobId: string, markdown: string): ScrapedJob 
 
 export async function scrapeJobDetails(jobId: string, apiKey: string): Promise<ScrapedJob | null> {
   try {
-    const response = await fetch("https://api.firecrawl.dev/v1/scrape", { method: "POST", headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" }, body: JSON.stringify({ url: `https://www.seek.com.au/job/${jobId}`, formats: ["markdown"], waitFor: 2000, timeout: 15000, location: { country: "AU", languages: ["en-AU"] }, onlyMainContent: true }) });
+    const response = await firecrawlScrape(apiKey, { url: `https://www.seek.com.au/job/${jobId}`, formats: ["markdown"], waitFor: 2000, timeout: 15000, location: { country: "AU", languages: ["en-AU"] }, onlyMainContent: true });
     if (!response.ok) return null;
     const payload = await response.json();
     const markdown = String((payload.data || payload)?.markdown || "");
