@@ -140,14 +140,15 @@ describe("run traces", () => {
     const trace = result.trace;
     expect(trace).toBeTruthy();
     if (!trace) throw new Error("expected a persisted run trace");
-    expect(trace.steps.map((step: any) => step.stage)).toEqual(["scout", "gatekeeper", "matcher", "skeptic", "briefer"]);
+    expect(trace.steps.map((step: any) => step.stage)).toEqual(["scout", "gatekeeper", "learner", "matcher", "skeptic", "briefer"]);
     expect(trace.steps[0].actor_type).toBe("script");
-    expect(trace.steps[2].actor_type).toBe("agent");
+    expect(trace.steps[3].actor_type).toBe("agent");
     expect(trace.funnel.found).toBe(3);
     expect(trace.funnel.dropped).toBe(2);
     expect(trace.funnel.passed_filters).toBe(1);
     expect(trace.funnel.graded).toBe(0);
-    expect(trace.steps[2].outputs_summary).toMatch(/no resume/i);
+    expect(trace.steps[2].outputs_summary).toMatch(/Learner/i);
+    expect(trace.steps[3].outputs_summary).toMatch(/no resume/i);
 
     const droppedSalary = trace.decisions.find((item: any) => item.decision === "dropped" && item.title === "Operations Manager");
     expect(droppedSalary).toBeTruthy();
@@ -173,7 +174,8 @@ describe("run traces", () => {
     const agent = await app.request("/api/agent/runs/latest/trace", { headers: { authorization: "Bearer agent-secret" } });
     expect(agent.status).toBe(200);
     const agentBody = await agent.json();
-    expect(agentBody.trace.steps).toHaveLength(5);
+    expect(agentBody.trace.steps).toHaveLength(6);
+    expect(agentBody.trace.steps.map((step: any) => step.stage)).toContain("learner");
     expect(agentBody.trace.funnel.found).toBe(3);
     expect(agentBody.trace.funnel_text).toMatch(/3 found/);
 

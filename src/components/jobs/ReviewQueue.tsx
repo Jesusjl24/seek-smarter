@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { ArrowRight, Star, XCircle } from "lucide-react";
+import { ArrowRight, Star, XCircle } from "lucide-react"
+import { SeekLink } from "@/components/jobs/SeekLink";
 import {
   Dialog,
   DialogContent,
@@ -151,14 +152,7 @@ export function ReviewQueue({
               {isLast ? "Finish" : "Review next"}
               <ArrowRight className="ml-1.5 h-4 w-4" aria-hidden />
             </Button>
-            <a
-              href={job.job_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="ml-auto text-sm text-primary hover:underline"
-            >
-              Open on SEEK
-            </a>
+            <SeekLink job={job} label="View on SEEK" />
           </div>
         </div>
       </DialogContent>

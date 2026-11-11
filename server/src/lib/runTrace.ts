@@ -1,12 +1,14 @@
 import { randomUUID } from "node:crypto";
 import type Database from "better-sqlite3";
+import { seekUrl } from "./jobUrl.js";
 
 export type ActorType = "script" | "agent";
-export type StageId = "scout" | "gatekeeper" | "matcher" | "skeptic" | "briefer";
+export type StageId = "scout" | "gatekeeper" | "learner" | "matcher" | "skeptic" | "briefer";
 
 export const STAGE_META: Record<StageId, { label: string; defaultActorType: ActorType; defaultActorName: string }> = {
   scout: { label: "Scout", defaultActorType: "script", defaultActorName: "SEEK search via Firecrawl" },
   gatekeeper: { label: "Gatekeeper", defaultActorType: "script", defaultActorName: "Salary, contract, industry, and duplicate checks" },
+  learner: { label: "Learner", defaultActorType: "agent", defaultActorName: "Updates what you like and avoid from your reactions" },
   matcher: { label: "Matcher", defaultActorType: "agent", defaultActorName: "Grades each role against your resume and goals" },
   skeptic: { label: "Analyst / Skeptic", defaultActorType: "script", defaultActorName: "Checks risks, chance, and whether the grade holds up" },
   briefer: { label: "Briefer", defaultActorType: "agent", defaultActorName: "Writes the morning briefing" },
@@ -120,7 +122,15 @@ export function loadLatestTrace(db: Database.Database, userId: string) {
   if (!row) return null;
   const steps = db.prepare("SELECT * FROM run_trace_steps WHERE trace_id=? ORDER BY sort_order, started_at").all(row.id) as any[];
   const decisions = db.prepare("SELECT * FROM run_trace_decisions WHERE trace_id=? ORDER BY created_at").all(row.id) as any[];
-  return serializeTrace(row, steps, decisions);
+  const trace = serializeTrace(row, steps, decisions);
+  const ids = [...new Set(trace.decisions.map((item: any) => item.job_id).filter(Boolean))];
+  const urls = new Map<string, string>();
+  if (ids.length) {
+    const jobs = db.prepare(`SELECT id, job_url, seek_job_id FROM jobs WHERE user_id=? AND id IN (${ids.map(() => "?").join(",")})`).all(userId, ...ids) as any[];
+    for (const job of jobs) urls.set(job.id, seekUrl(job));
+  }
+  trace.decisions = trace.decisions.map((item: any) => ({ ...item, job_url: urls.get(item.job_id) || seekUrl(item) }));
+  return trace;
 }
 
 export function loadJobDecisionTrail(db: Database.Database, userId: string, jobId: string) {
@@ -128,12 +138,12 @@ export function loadJobDecisionTrail(db: Database.Database, userId: string, jobI
   if (!job) return null;
   const traceRow = db.prepare("SELECT t.* FROM run_traces t JOIN run_trace_decisions d ON d.trace_id=t.id WHERE t.user_id=? AND d.job_id=? ORDER BY t.started_at DESC LIMIT 1").get(userId, jobId) as any
     || db.prepare("SELECT * FROM run_traces WHERE user_id=? ORDER BY started_at DESC LIMIT 1").get(userId) as any;
-  if (!traceRow) return { job, trace_id: null, stages: [] as any[] };
+  if (!traceRow) return { job: { ...job, job_url: seekUrl(job) }, trace_id: null, stages: [] as any[] };
   const decisions = db.prepare("SELECT * FROM run_trace_decisions WHERE trace_id=? AND job_id=? ORDER BY created_at").all(traceRow.id, jobId) as any[];
   const steps = db.prepare("SELECT * FROM run_trace_steps WHERE trace_id=? ORDER BY sort_order, started_at").all(traceRow.id) as any[];
   const byId = new Map(steps.map((step) => [step.id, step]));
   return {
-    job,
+    job: { ...job, job_url: seekUrl(job) },
     trace_id: traceRow.id,
     stages: decisions.map((item) => ({
       stage: item.stage,

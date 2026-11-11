@@ -13,6 +13,8 @@ import { uniqueSanitizedReasons } from "./providerErrors.js";
 import { pipelineSearchGapMs } from "./firecrawl.js";
 import { reviewGrade } from "./skeptic.js";
 import { finishRunTrace, finishTraceStep, loadLatestTrace, recordDecision, startRunTrace, startTraceStep, type Funnel } from "./runTrace.js";
+import { dislikedJobIds, runLearner } from "./preferences.js";
+import { seekUrl } from "./jobUrl.js";
 
 const sydneyDate = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Australia/Sydney", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
 
@@ -75,12 +77,12 @@ export async function runPipeline(db: Database.Database, config: Config, userId:
           const exists = db.prepare("SELECT id FROM jobs WHERE user_id=? AND seek_job_id=?").get(userId, job.seek_job_id) as any;
           if (!exists) {
             db.prepare("INSERT INTO jobs(id,user_id,seek_job_id,title,company,location,salary_range,work_type,work_arrangement,description_snippet,full_description,job_url,date_posted,date_scraped,pipeline_status,updated_at,search_profile_id,triage_source) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
-              .run(randomUUID(), userId, job.seek_job_id, job.title, job.company, job.location || "", job.salary_range || null, job.work_type || null, job.work_arrangement || null, job.description_snippet || "", job.full_description || null, job.job_url, job.date_posted || null, new Date().toISOString(), "inbox", new Date().toISOString(), p.id, "agent");
+              .run(randomUUID(), userId, job.seek_job_id, job.title, job.company, job.location || "", job.salary_range || null, job.work_type || null, job.work_arrangement || null, job.description_snippet || "", job.full_description || null, seekUrl(job), job.date_posted || null, new Date().toISOString(), "inbox", new Date().toISOString(), p.id, "agent");
             added++;
             const inserted = db.prepare("SELECT id FROM jobs WHERE user_id=? AND seek_job_id=?").get(userId, job.seek_job_id) as any; if (inserted) touched.add(inserted.id);
           } else {
             db.prepare("UPDATE jobs SET title=?,company=?,location=?,salary_range=?,work_type=?,work_arrangement=?,description_snippet=?,full_description=?,job_url=?,updated_at=? WHERE id=? AND user_id=?")
-              .run(job.title, job.company, job.location || "", job.salary_range || null, job.work_type || null, job.work_arrangement || null, job.description_snippet || "", job.full_description || null, job.job_url, new Date().toISOString(), exists.id, userId);
+              .run(job.title, job.company, job.location || "", job.salary_range || null, job.work_type || null, job.work_arrangement || null, job.description_snippet || "", job.full_description || null, seekUrl(job), new Date().toISOString(), exists.id, userId);
             touched.add(exists.id);
           }
         }
@@ -144,7 +146,9 @@ export async function runPipeline(db: Database.Database, config: Config, userId:
       counts: { checked: touched.size, kept, dropped, duplicates },
     });
 
-    const matcher = startTraceStep(db, trace.id, { stage: "matcher", actorType: "agent", actorName: "Grades each role against your resume and goals", model: hasAiKey(config) ? aiModelName(config) : null, sortOrder: 3 });
+    await runLearner(db, config, userId, trace.id, 3);
+
+    const matcher = startTraceStep(db, trace.id, { stage: "matcher", actorType: "agent", actorName: "Grades each role against your resume and goals", model: hasAiKey(config) ? aiModelName(config) : null, sortOrder: 4 });
     let scored = 0, hidden = 0, strong = 0;
     const aGradeJobs: any[] = [];
     const passing = touched.size ? db.prepare(`SELECT * FROM jobs WHERE user_id=? AND pipeline_status!='not_fit' AND id IN (${[...touched].map(() => "?")})`).all(userId, ...touched) as any[] : [];
@@ -226,7 +230,7 @@ export async function runPipeline(db: Database.Database, config: Config, userId:
       });
     }
 
-    const skeptic = startTraceStep(db, trace.id, { stage: "skeptic", actorType: "script", actorName: "Checks risks, chance, and whether the grade holds up", sortOrder: 4 });
+    const skeptic = startTraceStep(db, trace.id, { stage: "skeptic", actorType: "script", actorName: "Checks risks, chance, and whether the grade holds up", sortOrder: 5 });
     const matches = touched.size ? db.prepare(`SELECT j.*, m.grade, m.why_apply, m.risks, m.chance_estimate, m.match_score, m.evidence_json, m.criteria_json FROM jobs j JOIN job_matches m ON m.job_id=j.id AND m.user_id=j.user_id WHERE j.user_id=? AND j.id IN (${[...touched].map(() => "?")})`).all(userId, ...touched) as any[] : [];
     let flagged = 0;
     if (!matches.length) {
@@ -270,8 +274,9 @@ export async function runPipeline(db: Database.Database, config: Config, userId:
 
     const runIds = results.map((result) => result.id).filter(Boolean);
     const rows = touched.size ? db.prepare(`SELECT j.*,m.grade,m.why_apply,m.risks,m.chance_estimate,m.match_score FROM jobs j LEFT JOIN job_matches m ON m.job_id=j.id AND m.user_id=j.user_id WHERE j.user_id=? AND j.id IN (${[...touched].map(() => "?")})`).all(userId, ...touched) as any[] : [];
-    const recommended = rows.filter((j) => j.grade === "A" && !["applied", "not_fit"].includes(j.pipeline_status)).sort((a,b) => b.match_score-a.match_score).slice(0,5);
-    const worth = rows.filter((j) => j.grade === "B" && !["applied", "not_fit"].includes(j.pipeline_status));
+    const dislikedIds = new Set(dislikedJobIds(db, userId));
+    const recommended = rows.filter((j) => j.grade === "A" && !["applied", "not_fit"].includes(j.pipeline_status) && !dislikedIds.has(j.id)).sort((a,b) => b.match_score-a.match_score).slice(0,5);
+    const worth = rows.filter((j) => j.grade === "B" && !["applied", "not_fit"].includes(j.pipeline_status) && !dislikedIds.has(j.id));
     const filteredCounts = rows.filter((j) => j.filter_reason).reduce((out: any, job) => ({ ...out, [job.filter_reason]: (out[job.filter_reason] || 0) + 1 }), {});
     const allReasons = uniqueSanitizedReasons(results.flatMap((result) => result.skipped || []));
     const stats = { scanned: rows.length, worth_your_time: recommended.length, filtered_out: Object.values(filteredCounts).reduce((n: number, value) => n + Number(value), 0), filtered_counts: filteredCounts, reasons: allReasons, searches_run: profiles.length, searches_total: profiles.length };
@@ -281,7 +286,7 @@ export async function runPipeline(db: Database.Database, config: Config, userId:
     let finalNotes = marketNotes;
     let brieferActor: "agent" | "script" = "script";
     let brieferModel: string | null = null;
-    const briefer = startTraceStep(db, trace.id, { stage: "briefer", actorType: "script", actorName: "Writes the morning briefing", sortOrder: 5 });
+    const briefer = startTraceStep(db, trace.id, { stage: "briefer", actorType: "script", actorName: "Writes the morning briefing", sortOrder: 6 });
     if (hasAiKey(config) && rows.length) {
       try {
         const generated: any = await chatJson(config, {

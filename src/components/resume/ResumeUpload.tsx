@@ -152,9 +152,10 @@ export function ResumeUpload({ profile, onProfileUpdate }: ResumeUploadProps) {
               <AlertDialog>
                 <AlertDialogTrigger asChild>
                   <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                    variant="ghost"
+                    size="icon"
+                    className="h-11 w-11 text-muted-foreground hover:text-destructive"
+                    aria-label="Delete resume"
                     disabled={isDeleting}
                   >
                     <Trash2 className="h-3.5 w-3.5" />
@@ -231,12 +232,34 @@ export function ResumeUpload({ profile, onProfileUpdate }: ResumeUploadProps) {
               <Button
                 variant="outline"
                 size="sm"
-                className="w-full"
+                className="w-full min-h-11"
                 onClick={() => setShowViewModal(true)}
               >
                 <Eye className="h-4 w-4 mr-2" />
                 View
               </Button>
+            )}
+            {profile && (
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="outline" size="sm" className="w-full min-h-11 text-destructive hover:text-destructive" disabled={isDeleting}>
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Delete resume
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Delete your uploaded resume?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This removes the current file and parsed data. If you have an earlier resume version, that becomes the active one. Otherwise scoring will wait until you upload a resume again.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleRemoveResume}>Delete</AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             )}
             <Button
               variant={profile ? "outline" : "default"}

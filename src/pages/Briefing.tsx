@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { ExternalLink, ChevronDown, Clock3 } from "lucide-react";
+import { ChevronDown, Clock3 } from "lucide-react";
+import { SeekLink } from "@/components/jobs/SeekLink";
+import { JobReaction } from "@/components/jobs/JobReaction";
+import { LearnedPreferencesPanel } from "@/components/preferences/LearnedPreferencesPanel";
 import { fetchBriefing, fetchBriefings, fetchLatestBriefing, restoreJob, sendJobFeedback } from "@/lib/api/briefings";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -42,11 +45,10 @@ function JobCard({ job, refresh }: { job: any; refresh: () => void }) {
         {job.risks && <div className="rounded-md bg-amber-500/10 p-3 text-sm"><span className="font-medium">Key risk: </span>{job.risks}</div>}
         <p className="text-sm"><span className="font-medium">Chance: </span>{job.chance_estimate || "Not estimated"}</p>
         <div className="flex flex-wrap items-center gap-3">
-          <Button asChild className="min-h-11 w-full sm:w-auto">
-            <a href={job.job_url} target="_blank" rel="noreferrer">Open on SEEK <ExternalLink className="ml-2 h-4 w-4" /></a>
-          </Button>
+          <SeekLink job={job} label="View on SEEK" variant="button" />
           <Link className="text-sm text-primary hover:underline" to={`/run/jobs/${job.id}`}>How this was decided</Link>
         </div>
+        <JobReaction jobId={job.id} onChanged={refresh} />
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
           <Button className="min-h-11" variant="outline" onClick={() => act("applied")}>Applied</Button>
           <Button className="min-h-11" variant="outline" onClick={() => act("save_for_later")}>Save for later</Button>
@@ -114,6 +116,7 @@ export default function Briefing() {
           </div>
         )}
       </header>
+      <LearnedPreferencesPanel compact />
       <section className="space-y-4">
         <h2 className="text-xl font-semibold">Apply to these</h2>
         {briefing.recommendations.length
@@ -140,12 +143,16 @@ export default function Briefing() {
                 <Badge variant="secondary">{String(value)}</Badge>
               </div>
               {(briefing.filtered_out_jobs || []).filter((job: any) => job.filter_reason === key).map((job: any) => (
-                <div key={job.id} className="flex min-h-11 items-center justify-between gap-2 border-t py-2">
-                  <span>{job.title} · {job.company}</span>
-                  <div className="flex items-center gap-2">
-                    <Link className="text-sm text-primary hover:underline" to={`/run/jobs/${job.id}`}>Why</Link>
-                    <Button size="sm" variant="outline" onClick={async () => { await restoreJob(job.id); load(); }}>Restore</Button>
+                <div key={job.id} className="space-y-2 border-t py-2">
+                  <div className="flex min-h-11 flex-wrap items-center justify-between gap-2">
+                    <span>{job.title} · {job.company}</span>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <SeekLink job={job} />
+                      <Link className="text-sm text-primary hover:underline" to={`/run/jobs/${job.id}`}>Why</Link>
+                      <Button size="sm" variant="outline" onClick={async () => { await restoreJob(job.id); load(); }}>Restore</Button>
+                    </div>
                   </div>
+                  <JobReaction jobId={job.id} onChanged={load} />
                 </div>
               ))}
             </div>

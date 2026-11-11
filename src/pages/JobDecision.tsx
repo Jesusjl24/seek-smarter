@@ -4,6 +4,8 @@ import { fetchJobDecisionTrail } from "@/lib/api/traces";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { isGuest } from "@/lib/guest";
+import { SeekLink } from "@/components/jobs/SeekLink";
+import { JobReaction } from "@/components/jobs/JobReaction";
 
 function ActorBadge({ type }: { type: string }) {
   return <Badge variant={type === "agent" ? "default" : "secondary"}>{type === "agent" ? "Agent" : "Script"}</Badge>;
@@ -15,7 +17,7 @@ export default function JobDecision() {
   useEffect(() => {
     if (isGuest() || jobId.startsWith("demo")) {
       setTrail({
-        job: { title: "Operations Manager", company: "Example Co", salary_range: "$130,000–$180,000", location: "Sydney" },
+        job: { id: "demo", title: "Operations Manager", company: "Example Co", salary_range: "$130,000–$180,000", location: "Sydney", job_url: "https://www.seek.com.au/job/9000001" },
         stages: [{ stage: "scout", label: "Scout", actor_type: "script", decision: "found", reason: "This listing came from your Operations Manager search." }, { stage: "gatekeeper", label: "Gatekeeper", actor_type: "script", decision: "dropped", reason: "Dropped because the listed salary $130,000–$180,000 sits below your $140,000 floor.", evidence: [{ kind: "salary", text: "$130,000–$180,000" }] }],
       });
       return;
@@ -40,6 +42,10 @@ export default function JobDecision() {
         <h1 className="text-2xl font-bold sm:text-3xl">{job.title}</h1>
         <p className="text-muted-foreground">{job.company}{job.location ? ` · ${job.location}` : ""}</p>
         {job.salary_range && <p className="text-sm">{job.salary_range}</p>}
+        <div className="flex flex-wrap items-center gap-3 pt-1">
+          <SeekLink job={job} variant="button" />
+          {job.id && !String(job.id).startsWith("demo") && <JobReaction jobId={job.id} />}
+        </div>
       </header>
       <ol className="relative space-y-4 border-l border-border">
         {(trail.stages || []).map((stage: any, index: number) => (

@@ -8,7 +8,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { MatchScoreBadge } from "./MatchScoreBadge";
-import { ExternalLink, MapPin, Building2, Calendar, CheckCircle, XCircle, AlertTriangle, Lightbulb } from "lucide-react";
+import { ExternalLink, MapPin, Building2, Calendar, CheckCircle, XCircle, AlertTriangle, Lightbulb } from "lucide-react"
+import { SeekLink } from "@/components/jobs/SeekLink";
 import type { JobWithMatch } from "@/types/job";
 import { formatDistanceToNow } from "date-fns";
 
@@ -162,17 +163,7 @@ export function JobDetailModal({ job, open, onClose }: JobDetailModalProps) {
           </div>
 
           <div className="flex justify-end">
-            <Button asChild>
-              <a
-                href={job.job_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-2"
-              >
-                View on SEEK
-                <ExternalLink className="h-4 w-4" />
-              </a>
-            </Button>
+            <SeekLink job={job} label="View on SEEK" variant="button" />
           </div>
         </div>
       </DialogContent>

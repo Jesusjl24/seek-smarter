@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Briefcase, FileText, Mail, RefreshCw, User } from "lucide-react";
+import { ConfirmDelete } from "@/components/ui/confirm-delete";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -9,6 +10,7 @@ import { SectionPanel } from "@/components/today/SectionPanel";
 import { TruthCheckBadge } from "@/components/documents/TruthCheckBadge";
 import { DocumentDetailDialog } from "@/components/documents/DocumentDetailDialog";
 import {
+  deleteDocumentRevision,
   fetchDocumentWorkspace,
   jobMaterialsStatus,
   revisionHistory,
@@ -16,15 +18,18 @@ import {
   type DocumentWorkspace,
   type RevisionWithJob,
 } from "@/lib/api/documentRevisions";
+import { deleteResumeProfile } from "@/lib/api/resume";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 
 function RevisionRow({
   revision,
   onOpen,
+  onDelete,
 }: {
   revision: RevisionWithJob;
   onOpen: (r: RevisionWithJob) => void;
+  onDelete: (r: RevisionWithJob) => void;
 }) {
   return (
     <li
@@ -54,6 +59,11 @@ function RevisionRow({
       <Button size="sm" variant="outline" onClick={() => onOpen(revision)}>
         Review
       </Button>
+      <ConfirmDelete
+        title="Delete this document?"
+        description="This removes the document and any file attached to it. You can generate a new one later."
+        onConfirm={() => onDelete(revision)}
+      />
     </li>
   );
 }
@@ -74,6 +84,16 @@ const Documents = () => {
       setLoading(false);
     }
   }, [toast]);
+
+  const removeRevision = async (revision: RevisionWithJob) => {
+    try {
+      await deleteDocumentRevision(revision.id);
+      toast({ title: "Document deleted" });
+      load();
+    } catch {
+      toast({ title: "Could not delete that document", variant: "destructive" });
+    }
+  };
 
   useEffect(() => {
     load();
@@ -138,6 +158,22 @@ const Documents = () => {
             </p>
           </div>
           <Badge variant="outline">Never overwritten automatically</Badge>
+          {workspace.master && (
+            <ConfirmDelete
+              label="Delete resume"
+              title="Delete your uploaded resume?"
+              description="This removes the current file and parsed data. If you have an earlier resume version, that becomes the active one. Otherwise scoring will wait until you upload a resume again."
+              onConfirm={async () => {
+                try {
+                  await deleteResumeProfile(workspace.master?.profile_id || undefined);
+                  toast({ title: "Resume deleted" });
+                  load();
+                } catch (error) {
+                  toast({ title: "Could not delete that resume", variant: "destructive" });
+                }
+              }}
+            />
+          )}
         </CardContent>
       </Card>
 
@@ -187,7 +223,7 @@ const Documents = () => {
           >
             <ul className="divide-y">
               {workspace.tailoredResumes.map((r) => (
-                <RevisionRow key={r.id} revision={r} onOpen={setSelected} />
+                <RevisionRow key={r.id} revision={r} onOpen={setSelected} onDelete={removeRevision} />
               ))}
             </ul>
           </SectionPanel>
@@ -202,7 +238,7 @@ const Documents = () => {
           >
             <ul className="divide-y">
               {workspace.coverLetters.map((r) => (
-                <RevisionRow key={r.id} revision={r} onOpen={setSelected} />
+                <RevisionRow key={r.id} revision={r} onOpen={setSelected} onDelete={removeRevision} />
               ))}
             </ul>
           </SectionPanel>

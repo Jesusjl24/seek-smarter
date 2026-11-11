@@ -1,4 +1,5 @@
 import { firecrawlScrape } from "./firecrawl.js";
+import { seekUrl } from "./jobUrl.js";
 export interface ScrapedJob {
   seek_job_id: string;
   title: string;
@@ -14,8 +15,10 @@ export interface ScrapedJob {
 }
 
 export function isValidJob(job: ScrapedJob): boolean {
+  const url = seekUrl(job);
+  if (url && !job.job_url) job.job_url = url;
   return /^\d+$/.test(job.seek_job_id) &&
-    job.job_url.startsWith("https://www.seek.com.au/job/") &&
+    url.startsWith("https://www.seek.com.au/job/") &&
     !!job.title.trim() && !/^SEEK Job #\d+$/i.test(job.title) &&
     !!job.company.trim() && job.company !== "Unknown Company" &&
     !job.company.toLowerCase().includes("view on seek");

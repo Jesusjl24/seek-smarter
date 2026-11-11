@@ -6,6 +6,8 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { isGuest } from "@/lib/guest";
+import { SeekLink } from "@/components/jobs/SeekLink";
+import { JobReaction } from "@/components/jobs/JobReaction";
 
 const guestTrace = {
   id: "demo",
@@ -74,6 +76,10 @@ function DecisionList({ title, items }: { title: string; items: any[] }) {
               )}
             </div>
             <p className="mt-1 text-sm leading-6 text-muted-foreground">{item.reason}</p>
+            <div className="mt-2 flex flex-wrap items-center gap-3">
+              <SeekLink job={item} />
+              {item.job_id && !String(item.job_id).startsWith("demo") && <JobReaction jobId={item.job_id} />}
+            </div>
           </li>
         ))}
       </ul>

@@ -5,14 +5,16 @@ import type { Config } from "../config.js";
 import { gradeForScore } from "./grade.js";
 import { deterministicFilter, parseSalaryFloor } from "./dealbreakers.js";
 import { decodeRow } from "../db.js";
+import { aggregatePreferences, learnedPreferenceAdjustment, preferencePromptPayload } from "./preferences.js";
 
-const CRITERIA = ["role_fit", "seniority", "salary", "location", "skills"] as const;
+const CRITERIA = ["role_fit", "seniority", "salary", "location", "skills", "learned_preferences"] as const;
 const CRITERIA_LABELS: Record<string, string> = {
   role_fit: "Role fit",
   seniority: "Seniority",
   salary: "Salary vs $150,000–$180,000 target",
   location: "Location and work mode",
   skills: "Skills overlap",
+  learned_preferences: "Learned preferences",
 };
 
 function asText(value: unknown, fallback: string | null = null) {
@@ -68,16 +70,30 @@ export async function scoreJob(db: Database.Database, config: Config, userId: st
   const feedback = db.prepare("SELECT reason FROM job_feedback WHERE user_id=? AND action='not_for_me' AND reason IS NOT NULL ORDER BY created_at DESC LIMIT 10").all(userId) as any[];
   if (!job) throw new Error("Job not found"); if (!resume) throw new Error("Upload a resume before scoring jobs");
   const dealbreaker = deterministicFilter(job, prefs);
+  const learned = preferencePromptPayload(db, userId);
+  const aggregates = aggregatePreferences(db, userId);
+  const prefAdj = learnedPreferenceAdjustment(job, aggregates);
   const result: any = await chatJson(config, {
-    system: "Score this job against the resume and candidate preferences. Senior/lead scope matters: penalise junior and mid-level roles. Return JSON only with match_score (0-100), recommendation, reasoning, pros, cons, gaps, why_apply (2-3 concise sentences), risks, chance_estimate (short plain English), criteria, and evidence. criteria must include role_fit, seniority, salary, location, and skills; each has score (0-100), note (one sentence), and evidence (a short verbatim quote or fact). For salary, compare against the candidate's target band (AUD 150,000–180,000 when stated) and their salary floor. evidence is { resume_quotes: string[], job_quotes: string[] }. Never invent quotes or experience. If you cannot find a quote, omit it.",
-    user: JSON.stringify({ job, resume, preferences: prefs, recent_not_for_me_reasons: feedback.map((item) => item.reason) }),
+    system: "Score this job against the resume and candidate preferences. Senior/lead scope matters: penalise junior and mid-level roles. Return JSON only with match_score (0-100), recommendation, reasoning, pros, cons, gaps, why_apply (2-3 concise sentences), risks, chance_estimate (short plain English), criteria, and evidence. criteria must include role_fit, seniority, salary, location, and skills; each has score (0-100), note (one sentence), and evidence (a short verbatim quote or fact). For salary, compare against the candidate's target band (AUD 150,000–180,000 when stated) and their salary floor. If learned_preferences_memo or recent likes/dislikes are provided, weigh them and stay consistent with what the person has already told you they like or avoid. evidence is { resume_quotes: string[], job_quotes: string[] }. Never invent quotes or experience. If you cannot find a quote, omit it.",
+    user: JSON.stringify({ job, resume, preferences: prefs, recent_not_for_me_reasons: feedback.map((item) => item.reason), ...learned }),
   });
   let score = Math.max(0, Math.min(100, Number(result.match_score) || 0));
   const salary = parseSalaryFloor(job.salary_range); if (salary && prefs?.salary_min && salary < prefs.salary_min * 1.1) score = Math.max(0, score - 8);
+  if (prefAdj.delta) score = Math.max(0, Math.min(100, score + prefAdj.delta));
   const now = new Date().toISOString();
   const asJson = (value: unknown, fallback: unknown) => JSON.stringify(value ?? fallback);
   const grade = gradeForScore(score, { policy_strong: prefs?.policy_strong ?? 80, policy_review: prefs?.policy_review ?? 75 });
   const criteria = normalizeCriteria(result.criteria);
+  if (prefAdj.note || prefAdj.evidence || prefAdj.delta) {
+    criteria.learned_preferences = {
+      label: "Learned preferences",
+      score: prefAdj.score,
+      note: prefAdj.note,
+      evidence: prefAdj.evidence,
+    };
+  } else {
+    delete criteria.learned_preferences;
+  }
   const evidence = normalizeEvidence(result, resume, job);
   const row = { id: randomUUID(), user_id: userId, job_id: jobId, resume_profile_id: resume.id, match_score: score, skill_match_percentage: Number(result.skill_match_percentage) || score, recommendation: asText(result.recommendation, "review"), reasoning: asText(result.reasoning), pros: asJson(result.pros, []), cons: asJson(result.cons, []), gaps: asJson(result.gaps, []), strategic_advice: asText(result.strategic_advice), scored_at: now, grade, why_apply: asText(result.why_apply), risks: asText(result.risks), chance_estimate: asText(result.chance_estimate, "Unknown"), agent: "score_job", agent_version: "1.2", veto_reasons: asJson(result.veto_reasons, []), scores: asJson(result.scores, null), dealbreaker_hits: asJson([...dealbreaker.hits, ...(result.dealbreaker_hits || [])], []), concerns: asJson(result.concerns, []), evidence_json: asJson(evidence, {}), criteria_json: asJson(criteria, {}) };
   db.prepare(`INSERT INTO job_matches (${Object.keys(row).join(",")}) VALUES (${Object.keys(row).map(() => "?").join(",")}) ON CONFLICT(user_id,job_id,resume_profile_id) DO UPDATE SET match_score=excluded.match_score,recommendation=excluded.recommendation,reasoning=excluded.reasoning,pros=excluded.pros,cons=excluded.cons,gaps=excluded.gaps,scored_at=excluded.scored_at,grade=excluded.grade,why_apply=excluded.why_apply,risks=excluded.risks,chance_estimate=excluded.chance_estimate,dealbreaker_hits=excluded.dealbreaker_hits,evidence_json=excluded.evidence_json,criteria_json=excluded.criteria_json`).run(...Object.values(row));

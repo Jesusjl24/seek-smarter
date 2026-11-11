@@ -9,7 +9,9 @@ import {
   Star,
   Trash2,
   XCircle,
-} from "lucide-react";
+} from "lucide-react"
+import { SeekLink } from "@/components/jobs/SeekLink"
+import { JobReaction } from "@/components/jobs/JobReaction";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -223,6 +225,11 @@ export function RecommendationCard({
               )}
             </div>
 
+            <div className="mt-3 flex flex-wrap items-center gap-3">
+              <SeekLink job={job} />
+              <JobReaction jobId={job.id} />
+            </div>
+
             <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t pt-3">
               <p data-testid="job-next-action" className="text-xs text-muted-foreground">
                 <span className="font-medium text-foreground">Next:</span> {nextAction}
@@ -280,10 +287,7 @@ export function RecommendationCard({
                       Move to Not a Fit
                     </DropdownMenuItem>
                     <DropdownMenuItem asChild>
-                      <a href={job.job_url} target="_blank" rel="noopener noreferrer">
-                        <ExternalLink className="mr-2 h-4 w-4" aria-hidden />
-                        Open on SEEK
-                      </a>
+                      <SeekLink job={job} className="flex cursor-pointer items-center px-2 py-1.5 text-sm" />
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem

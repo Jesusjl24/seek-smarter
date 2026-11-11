@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
-import { ExternalLink, MoreHorizontal, ArrowUpDown, Trash2, Inbox, Star, XCircle } from "lucide-react";
+import { ExternalLink, MoreHorizontal, ArrowUpDown, Trash2, Inbox, Star, XCircle } from "lucide-react"
+import { SeekLink } from "@/components/jobs/SeekLink";
 import { formatDistanceToNow } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -446,10 +447,7 @@ export function JobsTable({
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
                       <DropdownMenuItem asChild>
-                        <a href={job.job_url} target="_blank" rel="noopener noreferrer" className="flex items-center">
-                          <ExternalLink className="h-4 w-4 mr-2" />
-                          View on SEEK
-                        </a>
+                        <SeekLink job={job} />
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
                       {availableActions.moveToInbox && (

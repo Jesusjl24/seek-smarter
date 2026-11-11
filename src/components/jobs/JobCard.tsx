@@ -1,4 +1,6 @@
 import { ExternalLink, MapPin, Building2, Calendar, Trash2, Star, XCircle } from "lucide-react";
+import { SeekLink } from "@/components/jobs/SeekLink";
+import { JobReaction } from "@/components/jobs/JobReaction";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -142,15 +144,10 @@ export function JobCard({
               <Trash2 className="h-4 w-4" />
             </Button>
           </div>
-          <a
-            href={job.job_url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-sm text-primary hover:underline flex items-center gap-1"
-          >
-            View on SEEK
-            <ExternalLink className="h-3.5 w-3.5" />
-          </a>
+          <div className="flex flex-wrap items-center gap-3">
+            <SeekLink job={job} />
+            <JobReaction jobId={job.id} />
+          </div>
         </div>
       </CardContent>
     </Card>
