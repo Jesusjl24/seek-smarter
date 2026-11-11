@@ -78,6 +78,23 @@ describe("filter reasons", () => {
     expect(result.humanReason).toMatch(/contract/i);
     expect(result.evidence[0]?.text).toMatch(/Contract/i);
   });
+
+  it("does not say a full-time listing was dropped for being full time when the contract wording is in the ad", () => {
+    const result = deterministicFilter(
+      {
+        title: "IT Delivery Lead",
+        company: "Example",
+        salary_range: "$200,000-$220,000",
+        work_type: "Full time",
+        full_description: "This is a contract role for a six-month transformation programme.",
+      },
+      { salary_min: 140000 },
+    );
+    expect(result.reason).toBe("contract");
+    expect(result.humanReason).toMatch(/this is a contract role/i);
+    expect(result.humanReason).not.toMatch(/this listing is full time/i);
+    expect(result.evidence[0]?.text).toMatch(/this is a contract role/i);
+  });
 });
 
 describe("briefing wording", () => {
