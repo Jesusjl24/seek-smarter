@@ -9,6 +9,8 @@ import { RequireAuth } from "@/components/auth/RequireAuth";
 import { MainLayout } from "@/components/layout/MainLayout";
 import Inbox from "./pages/Inbox";
 import Briefing from "./pages/Briefing";
+import RunTrace from "./pages/RunTrace";
+import JobDecision from "./pages/JobDecision";
 import Today from "./pages/Today";
 import Documents from "./pages/Documents";
 import AssistantActivity from "./pages/AssistantActivity";
@@ -48,6 +50,8 @@ const App = () => (
                 <Route path="/assistant" element={<AssistantActivity />} />
                 <Route path="/" element={<Briefing />} />
                 <Route path="/briefing" element={<Briefing />} />
+                <Route path="/run" element={<RunTrace />} />
+                <Route path="/run/jobs/:jobId" element={<JobDecision />} />
                 <Route path="/inbox" element={<Inbox />} />
 
                 <Route path="/shortlist" element={<Shortlist />} />

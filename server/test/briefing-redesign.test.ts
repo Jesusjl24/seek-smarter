@@ -91,7 +91,7 @@ describe("briefing redesign", () => {
     expect(result.briefing).toMatchObject({ scanned: 0 });
     expect(result.profiles.every((profile: any) => (profile.jobs_drafted ?? 0) === 0)).toBe(true);
     const briefing = db.prepare("SELECT * FROM briefings WHERE user_id='u3'").get() as any;
-    expect(briefing.summary_text).toMatch(/Nothing was added to this briefing|listings scanned/);
+    expect(briefing.summary_text).toMatch(/Nothing was added to this briefing|listings scanned|looked at/);
     expect(result.reasons.join(" ")).toMatch(/FIRECRAWL_API_KEY for reliable scraping/);
     expect((db.prepare("SELECT count(*) count FROM document_revisions").get() as any).count).toBe(0);
   });

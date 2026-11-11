@@ -13,7 +13,7 @@ export function openDatabase(filename: string) {
   return db;
 }
 
-export const jsonColumns = new Set(["skills_technical","skills_soft","education","certifications","previous_titles","industries","pros","cons","gaps","veto_reasons","scores","dealbreaker_hits","concerns","content","target_titles","target_industries","excluded_titles","excluded_industries","locations","work_arrangements","work_types","mandatory_qualifications","dealbreakers","checklist","truth_check","stats","recommended_job_ids","worth_a_look_job_ids","filtered_counts","pipeline_run_ids"]);
+export const jsonColumns = new Set(["skills_technical","skills_soft","education","certifications","previous_titles","industries","pros","cons","gaps","veto_reasons","scores","dealbreaker_hits","concerns","content","target_titles","target_industries","excluded_titles","excluded_industries","locations","work_arrangements","work_types","mandatory_qualifications","dealbreakers","checklist","truth_check","stats","recommended_job_ids","worth_a_look_job_ids","filtered_counts","pipeline_run_ids","evidence_json","criteria_json","funnel_json","counts_json"]);
 export function decodeRow<T = any>(row: any): T {
   if (!row) return row;
   const result = { ...row };

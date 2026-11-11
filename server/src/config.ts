@@ -49,3 +49,9 @@ export function hasAiKey(config: Config): boolean {
   if (config.aiProvider === "gemini") return !!config.geminiApiKey;
   return !!config.xaiApiKey;
 }
+
+export function aiModelName(config: Config): string {
+  if (config.aiProvider === "openai") return config.openaiModel;
+  if (config.aiProvider === "gemini") return config.geminiModel;
+  return config.xaiModel;
+}

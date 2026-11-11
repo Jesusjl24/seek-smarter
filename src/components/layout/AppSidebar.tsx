@@ -9,6 +9,7 @@ import {
   SlidersHorizontal,
   Sun,
   FileText,
+  ListTree,
 } from "lucide-react";
 
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
@@ -53,6 +54,7 @@ const navGroups: { label: string; items: NavItem[] }[] = [
     label: "Daily",
     items: [
       { title: "Briefing", url: "/", icon: Sun, countKey: null, testId: "nav-briefing" },
+      { title: "How this was decided", url: "/run", icon: ListTree, countKey: null, testId: "nav-run-trace" },
       {
         title: "Documents",
         url: "/documents",
