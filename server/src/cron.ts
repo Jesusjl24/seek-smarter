@@ -9,6 +9,10 @@ let currentTask: ScheduledTask | null = null;
 export function startCron(db: Database.Database, config: Config) {
   currentTask?.stop();
   currentTask = null;
+  if (String(config.pipelineCron).toLowerCase() === "off") {
+    console.log("[pipeline] scheduled runs paused (PIPELINE_CRON=off)");
+    return null;
+  }
   const expression = (db.prepare("SELECT value FROM app_settings WHERE key='pipeline_cron'").get() as any)?.value || config.pipelineCron;
   const timezone = (db.prepare("SELECT value FROM app_settings WHERE key='pipeline_timezone'").get() as any)?.value || config.pipelineCronTimezone || "Australia/Sydney";
   if (String(expression).toLowerCase() === "off") return null;
